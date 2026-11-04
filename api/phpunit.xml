@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         failOnWarning="true"
+         failOnRisky="true">
+  <testsuites>
+    <testsuite name="api">
+      <directory>tests</directory>
+    </testsuite>
+  </testsuites>
+  <php>
+    <env name="KT_DB_DSN" value="mysql:host=127.0.0.1;dbname=kt_test" force="true"/>
+    <env name="KT_DB_USER" value="kt" force="true"/>
+    <env name="KT_DB_PASS" value="kt" force="true"/>
+  </php>
+</phpunit>
