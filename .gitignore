@@ -6,3 +6,4 @@ web/dist/
 .DS_Store
 api/.phpunit.result.cache
 api/sessions/
+Kitchen_Tracker_Requirements_v1.docx
