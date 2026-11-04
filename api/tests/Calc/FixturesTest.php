@@ -98,11 +98,11 @@ final class FixturesTest extends TestCase
         $this->assertSame2($out, Compare::change(...$in));
     }
 
-    public function testEnteredAmount(): void
+    public static function enteredAmountCases(): array { return self::cases('enteredAmount'); }
+
+    #[DataProvider('enteredAmountCases')]
+    public function testEnteredAmount(array $in, mixed $out): void
     {
-        $this->assertSame(1234, LineCalc::enteredAmount(['entry_mode' => 'total', 'entered_amount' => 1234]));
-        $this->assertSame(2500, LineCalc::enteredAmount(['entry_mode' => 'unit_price', 'unit_price' => 500, 'quantity' => 5]));
-        $this->assertSame(1500, LineCalc::enteredAmount(['entry_mode' => 'unit_price', 'unit_price' => 500, 'quantity' => 1, 'package_count' => 3]));
-        $this->assertSame(1250, LineCalc::enteredAmount(['entry_mode' => 'unit_price', 'unit_price' => 1000, 'quantity' => 1.25]));
+        $this->assertSame($out, LineCalc::enteredAmount(...$in));
     }
 }

@@ -20,13 +20,17 @@
     {"in": [[1, 1, 1], -100], "out": [-34, -33, -33]},
     {"in": [[333, 333, 334], 5], "out": [2, 2, 1]},
     {"in": [[500], -501], "out": [-501]},
-    {"in": [[100, 200], 0], "out": [0, 0]}
+    {"in": [[100, 200], 0], "out": [0, 0]},
+    {"in": [[1, 1], -1], "out": [0, -1]},
+    {"in": [[1, 1, 2], -2], "out": [-1, -1, 0]},
+    {"in": [[1, 1], 1], "out": [0, 1]}
   ],
   "costs": [
     {"in": [1000, "factura", false, 0.19], "out": {"real_cost": 1000, "amount_paid": 1190}},
     {"in": [1190, "boleta", false, 0.19], "out": {"real_cost": 1190, "amount_paid": 1190}},
     {"in": [1000, "factura", true, 0.19], "out": {"real_cost": 1000, "amount_paid": 1000}},
-    {"in": [5, "factura", false, 0.19], "out": {"real_cost": 5, "amount_paid": 6}}
+    {"in": [5, "factura", false, 0.19], "out": {"real_cost": 5, "amount_paid": 6}},
+    {"in": [50, "factura", false, 0.19], "out": {"real_cost": 50, "amount_paid": 60}}
   ],
   "normalizedPrice": [
     {"in": [1300, 1], "out": 1300},
@@ -48,5 +52,11 @@
     {"in": [1000, null, 10], "out": {"status": "none", "diff": null, "pct": null, "flagged": false}},
     {"in": [1000, 0, 10], "out": {"status": "none", "diff": null, "pct": null, "flagged": false}},
     {"in": [1000, 1000, 10], "out": {"status": "same", "diff": 0, "pct": 0, "flagged": false}}
+  ],
+  "enteredAmount": [
+    {"in": [{"entry_mode": "total", "entered_amount": 1234}], "out": 1234},
+    {"in": [{"entry_mode": "unit_price", "unit_price": 500, "quantity": 5}], "out": 2500},
+    {"in": [{"entry_mode": "unit_price", "unit_price": 500, "quantity": 1, "package_count": 3}], "out": 1500},
+    {"in": [{"entry_mode": "unit_price", "unit_price": 1000, "quantity": 1.25}], "out": 1250}
   ]
 }
