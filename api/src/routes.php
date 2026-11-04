@@ -78,4 +78,5 @@ return static function (Router $router): void {
     });
 
     CatalogController::register($router);
+    \KT\Receipts\ReceiptController::register($router);
 };
