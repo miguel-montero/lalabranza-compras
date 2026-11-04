@@ -1,0 +1,60 @@
+/*
+ * La Labranza palette, read from the public site's stylesheet (lalabranza.cl):
+ *   --color-piedra-volcanica #2b2622   --color-fibra-cruda #d8cdbc
+ *   --color-cobre-viejo #8a5a34        --color-lana-dorada #b8935a
+ *   --color-vina #3d4a32               --color-vino-tinto #4e1b26
+ * Fonts: Fraunces (display), Space Grotesk (labels / UI), Lora (body), self-hosted.
+ * The site publishes no light paper tone for app surfaces, so --paper / --paper-raised
+ * are tints of fibra-cruda chosen for readable forms.
+ */
+@import "@fontsource-variable/fraunces";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/lora";
+
+:root {
+    --piedra-volcanica: #2b2622;
+    --fibra-cruda: #d8cdbc;
+    --cobre-viejo: #8a5a34;
+    --lana-dorada: #b8935a;
+    --vina: #3d4a32;
+    --vino-tinto: #4e1b26;
+    --paper: #f6f2ea;
+    --paper-raised: #fcfaf6;
+
+    --background: var(--paper);
+    --foreground: var(--piedra-volcanica);
+    --card: var(--paper-raised);
+    --card-foreground: var(--piedra-volcanica);
+    --popover: var(--paper-raised);
+    --popover-foreground: var(--piedra-volcanica);
+    --primary: var(--piedra-volcanica);
+    --primary-foreground: var(--paper);
+    --secondary: #ebe4d6;
+    --secondary-foreground: var(--piedra-volcanica);
+    --muted: #ebe4d6;
+    --muted-foreground: #6a6055;
+    --accent: var(--fibra-cruda);
+    --accent-foreground: var(--piedra-volcanica);
+    --destructive: #a12f2f;
+    --border: var(--fibra-cruda);
+    --input: #c9bda8;
+    --ring: var(--cobre-viejo);
+    --chart-1: var(--cobre-viejo);
+    --chart-2: var(--vina);
+    --chart-3: var(--lana-dorada);
+    --chart-4: var(--vino-tinto);
+    --chart-5: #7d7264;
+    --radius: 0.625rem;
+    --sidebar: var(--piedra-volcanica);
+    --sidebar-foreground: var(--fibra-cruda);
+    --sidebar-primary: var(--lana-dorada);
+    --sidebar-primary-foreground: var(--piedra-volcanica);
+    --sidebar-accent: #3b342e;
+    --sidebar-accent-foreground: var(--paper);
+    --sidebar-border: #443c35;
+    --sidebar-ring: var(--lana-dorada);
+
+    /* price-change semantics */
+    --up: #a12f2f;
+    --down: var(--vina);
+}

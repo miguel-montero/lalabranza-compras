@@ -1,17 +1,15 @@
 import type { BaseUnit } from './calc'
 import { roundHalfAway } from './calc'
 
-const clp = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 0, useGrouping: true })
-const pct = new Intl.NumberFormat('es-CL', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-  useGrouping: true,
-})
+/** Dot thousands separator, done by hand so output never depends on browser ICU data. */
+function groupThousands(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
 
 /** 1300 -> "$1.300", -400 -> "-$400". Rounded half away to a whole peso. */
 export function formatCLP(n: number): string {
   const r = roundHalfAway(n)
-  const body = '$' + clp.format(Math.abs(r)).replace(/ /g, '')
+  const body = '$' + groupThousands(String(Math.abs(r)))
   return r < 0 ? '-' + body : body
 }
 
@@ -23,7 +21,8 @@ export function formatUnitPrice(n: number, base: BaseUnit): string {
 /** 15.38 -> "+15,38%", -10 -> "-10,00%", 0 -> "0,00%". */
 export function formatPct(p: number): string {
   const r = roundHalfAway(p, 2)
-  const body = pct.format(Math.abs(r))
+  const [int, dec] = Math.abs(r).toFixed(2).split('.')
+  const body = `${groupThousands(int)},${dec}`
   return (r > 0 ? '+' : r < 0 ? '-' : '') + body + '%'
 }
 
