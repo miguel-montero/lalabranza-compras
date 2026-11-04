@@ -21,6 +21,7 @@ function CategoryDialog({ category, open, onOpenChange }: { category: Category |
   }, [open, category])
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    e.stopPropagation()
     if (!name.trim()) return setError('El nombre es obligatorio.')
     try {
       await save.mutateAsync({ id: category?.id, name: name.trim() })

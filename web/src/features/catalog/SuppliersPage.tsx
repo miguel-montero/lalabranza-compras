@@ -26,6 +26,7 @@ function SupplierDialog({ supplier, open, onOpenChange }: { supplier: Supplier |
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    e.stopPropagation()
     if (!name.trim()) return setError('El nombre es obligatorio.')
     try {
       await save.mutateAsync({ id: supplier?.id, name: name.trim(), notes: notes.trim() || null })

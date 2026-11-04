@@ -49,6 +49,8 @@ export function ProductFormDialog({ open, onOpenChange, product, initialName = '
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    // The dialog can be rendered inside another <form> (receipt entry); React events bubble through portals.
+    e.stopPropagation()
     setError(null)
     if (!name.trim()) return setError('El nombre es obligatorio.')
     try {

@@ -123,10 +123,8 @@ export default function ReceiptForm({ storageKey, initial, submit, onSaved }: Re
   return (
     <form
       className="grid gap-4"
-      onSubmit={(e) => {
-        e.preventDefault()
-        void save()
-      }}
+      // Saving happens only via the save button; Enter / "Go" in inputs must never submit.
+      onSubmit={(e) => e.preventDefault()}
     >
       <div className="sticky top-0 z-10 -mx-4 flex items-baseline justify-between border-b bg-background/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:border-0 md:px-0">
         <h1 className="text-2xl font-semibold">Nueva compra</h1>
@@ -247,7 +245,7 @@ export default function ReceiptForm({ storageKey, initial, submit, onSaved }: Re
         )}
       </Section>
 
-      <Button type="submit" size="lg" disabled={saving} className="w-full">
+      <Button type="button" size="lg" disabled={saving} className="w-full" onClick={() => void save()}>
         {saving ? 'Guardando…' : 'Guardar compra'}
       </Button>
 
