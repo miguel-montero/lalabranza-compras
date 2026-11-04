@@ -21,6 +21,7 @@ if (is_file($autoload)) {
 $configFile = __DIR__ . '/config.php';
 $config = is_file($configFile) ? (require $configFile) : [];
 KT\Db::configure($config);
+KT\Auth\Auth::configure($config);
 
 ini_set('display_errors', '0');
 set_error_handler(static function (int $no, string $str, string $file, int $line): bool {
