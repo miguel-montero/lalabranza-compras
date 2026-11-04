@@ -1,0 +1,52 @@
+{
+  "toBase": [
+    {"in": [1000, "g", "kg"], "out": 1},
+    {"in": [750, "mL", "L"], "out": 0.75},
+    {"in": [2, "kg", "L"], "out": null},
+    {"in": [3, "unidad", "kg"], "out": null},
+    {"in": [2, "kg", "kg"], "out": 2},
+    {"in": [1.5, "L", "L"], "out": 1.5},
+    {"in": [4, "unidad", "unidad"], "out": 4}
+  ],
+  "baseQuantity": [
+    {"in": [{"quantity": 1, "entry_unit": "kg", "package_count": 3, "package_content": 500, "package_unit": "g"}, "kg"], "out": 1.5},
+    {"in": [{"quantity": 1, "entry_unit": "unidad", "package_count": null, "package_content": null, "package_unit": null}, "L"], "out": null},
+    {"in": [{"quantity": 1, "entry_unit": "unidad", "package_count": 2, "package_content": 12, "package_unit": "unidad"}, "unidad"], "out": 24},
+    {"in": [{"quantity": 2.5, "entry_unit": "kg", "package_count": null, "package_content": null, "package_unit": null}, "kg"], "out": 2.5},
+    {"in": [{"quantity": 500, "entry_unit": "g", "package_count": null, "package_content": null, "package_unit": null}, "kg"], "out": 0.5}
+  ],
+  "spread": [
+    {"in": [[1000, 3000], -400], "out": [-100, -300]},
+    {"in": [[1, 1, 1], -100], "out": [-34, -33, -33]},
+    {"in": [[333, 333, 334], 5], "out": [2, 2, 1]},
+    {"in": [[500], -501], "out": [-501]},
+    {"in": [[100, 200], 0], "out": [0, 0]}
+  ],
+  "costs": [
+    {"in": [1000, "factura", false, 0.19], "out": {"real_cost": 1000, "amount_paid": 1190}},
+    {"in": [1190, "boleta", false, 0.19], "out": {"real_cost": 1190, "amount_paid": 1190}},
+    {"in": [1000, "factura", true, 0.19], "out": {"real_cost": 1000, "amount_paid": 1000}},
+    {"in": [5, "factura", false, 0.19], "out": {"real_cost": 5, "amount_paid": 6}}
+  ],
+  "normalizedPrice": [
+    {"in": [1300, 1], "out": 1300},
+    {"in": [1000, 1.5], "out": 666.6667},
+    {"in": [1000, null], "out": null},
+    {"in": [1000, 0], "out": null}
+  ],
+  "receiptTotals": [
+    {"in": [[{"real_cost": 1000, "iva_exempt": false}, {"real_cost": 500, "iva_exempt": true}], 2000, "factura", 0.19],
+     "out": {"neto": 3000, "exento": 500, "iva": 570, "total": 4070}},
+    {"in": [[{"real_cost": 1000, "iva_exempt": false}, {"real_cost": 500, "iva_exempt": true}], 2000, "boleta", 0.19],
+     "out": {"neto": 0, "exento": 0, "iva": 0, "total": 3500}}
+  ],
+  "change": [
+    {"in": [1500, 1300, 10], "out": {"status": "up", "diff": 200, "pct": 15.38, "flagged": true}},
+    {"in": [1100, 1000, 10], "out": {"status": "up", "diff": 100, "pct": 10, "flagged": true}},
+    {"in": [1050, 1000, 10], "out": {"status": "up", "diff": 50, "pct": 5, "flagged": false}},
+    {"in": [900, 1000, 10], "out": {"status": "down", "diff": -100, "pct": -10, "flagged": true}},
+    {"in": [1000, null, 10], "out": {"status": "none", "diff": null, "pct": null, "flagged": false}},
+    {"in": [1000, 0, 10], "out": {"status": "none", "diff": null, "pct": null, "flagged": false}},
+    {"in": [1000, 1000, 10], "out": {"status": "same", "diff": 0, "pct": 0, "flagged": false}}
+  ]
+}
