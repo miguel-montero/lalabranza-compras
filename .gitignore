@@ -1,0 +1,7 @@
+.superpowers/
+api/vendor/
+api/config.php
+web/node_modules/
+web/dist/
+dist/
+.DS_Store
