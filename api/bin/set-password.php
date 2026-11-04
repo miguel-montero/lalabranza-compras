@@ -10,7 +10,10 @@ require __DIR__ . '/../bootstrap.php';
 function prompt(string $label): string
 {
     fwrite(STDOUT, $label);
-    $tty = stripos(PHP_OS, 'WIN') !== 0 && function_exists('posix_isatty') && posix_isatty(STDIN);
+    // Checked once, before any read: posix_isatty() on a piped STDIN that already buffered data warns
+    // ("buffered data lost"), which the error handler turns into a fatal error (`< clave.txt` case).
+    static $tty = null;
+    $tty ??= stripos(PHP_OS, 'WIN') !== 0 && function_exists('posix_isatty') && @posix_isatty(STDIN);
     if ($tty) {
         shell_exec('stty -echo');
     }
