@@ -6,5 +6,6 @@ return [
     'db_pass' => 'kt',
     'cookie_secure' => false,   // true in production (HTTPS)
     'backup_dir' => __DIR__ . '/../backups', // outside the web docroot in production
-    'cron_token' => 'change-me',
+    // >= 32 characters, random (e.g. `openssl rand -hex 24`). Shorter tokens make /api/cron/backup always 403.
+    'cron_token' => 'change-me-to-a-long-random-string-0123456789',
 ];

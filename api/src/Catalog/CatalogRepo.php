@@ -206,6 +206,19 @@ final class CatalogRepo
         return $id === false ? null : $this->getProduct((int)$id);
     }
 
+    /** Exact match (case/accent-insensitive) on supplier name. */
+    public function findSupplierByName(string $text): ?array
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return null;
+        }
+        $st = $this->pdo->prepare('SELECT id FROM suppliers WHERE name = ? ORDER BY active DESC, id LIMIT 1');
+        $st->execute([$text]);
+        $id = $st->fetchColumn();
+        return $id === false ? null : $this->getSupplier((int) $id);
+    }
+
     // ---- aliases ---------------------------------------------------------------
 
     public function addAlias(int $productId, string $alias): ?array

@@ -16,6 +16,7 @@ return static function (Router $router): void {
     $public = [
         'GET /health',
         'POST /auth/login',
+        'GET /cron/backup',
         'GET /auth/me',
     ];
 
@@ -80,4 +81,6 @@ return static function (Router $router): void {
     CatalogController::register($router);
     \KT\Receipts\ReceiptController::register($router);
     \KT\Prices\PricesController::register($router);
+    \KT\Admin\AdminController::register($router);
+    \KT\Import\ImportController::register($router);
 };
