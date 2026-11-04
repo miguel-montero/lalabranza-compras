@@ -192,10 +192,14 @@ final class ReceiptService
     /** Full replace of header and items; keeps the receipt's original iva_rate snapshot. Returns the new view. */
     public function update(int $id, array $input): array
     {
-        if ($this->view($id) === null) {
+        $current = $this->view($id);
+        if ($current === null) {
             throw new HttpError(404, 'not_found');
         }
-        ReceiptValidator::validate($input);
+        ReceiptValidator::validate($input, [
+            'supplier_id' => $current['supplier']['id'],
+            'product_ids' => array_column($current['items'], 'product_id'),
+        ]);
         $reason = $this->reason($input);
         $supplierId = (int) $input['supplier_id'];
         $number = $input['receipt_number'] ?? null;

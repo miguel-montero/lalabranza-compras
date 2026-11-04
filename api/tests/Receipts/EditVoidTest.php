@@ -190,4 +190,27 @@ final class EditVoidTest extends ApiTestCase
         [$st, $v] = $this->call('POST', '/receipts', $this->receipt($s, [$this->line($p, 1000, 1, 'kg', ['iva_exempt' => 1])], ['doc_type' => 'factura']));
         $this->assertTrue($v['items'][0]['iva_exempt']);
     }
+
+    public function test_edit_allowed_after_supplier_and_product_deactivated(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $p = $this->makeProduct('Arroz', 'kg');
+        $a = $this->make($s, [$this->line($p, 1000)]);
+        self::$pdo->exec("UPDATE suppliers SET active = 0 WHERE id = $s");
+        self::$pdo->exec("UPDATE products SET active = 0 WHERE id = $p");
+        [$st, $v] = $this->call('PUT', "/receipts/{$a['id']}", $this->input($a, [$this->line($p, 1100)]));
+        $this->assertSame(200, $st, json_encode($v));
+        $this->assertSame(1100, $v['items'][0]['real_cost']);
+        // a newly referenced inactive supplier/product is still rejected
+        $p2 = $this->makeProduct('Azucar', 'kg');
+        self::$pdo->exec("UPDATE products SET active = 0 WHERE id = $p2");
+        [$st] = $this->call('PUT', "/receipts/{$a['id']}", $this->input($a, [$this->line($p2, 1100)]));
+        $this->assertSame(422, $st);
+        $s2 = $this->makeSupplier('Jumbo');
+        self::$pdo->exec("UPDATE suppliers SET active = 0 WHERE id = $s2");
+        $in = $this->input($a, [$this->line($p, 1100)]);
+        $in['supplier_id'] = $s2;
+        [$st] = $this->call('PUT', "/receipts/{$a['id']}", $in);
+        $this->assertSame(422, $st);
+    }
 }

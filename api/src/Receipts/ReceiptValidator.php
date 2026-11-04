@@ -15,8 +15,12 @@ final class ReceiptValidator
     public const MODES = ['total', 'unit_price'];
 
     /** Throws HttpError(422, 'validation', ['fields' => [...]]) when the input is not acceptable. */
-    public static function validate(array $input): void
+    public static function validate(array $input, ?array $existing = null): void
     {
+        // $existing (edit mode): ['supplier_id' => int, 'product_ids' => int[]] already on the receipt. They stay
+        // acceptable even if since deactivated; only newly referenced ones must be active.
+        $keepSupplier = isset($existing['supplier_id']) ? (int) $existing['supplier_id'] : null;
+        $keepProducts = array_map('intval', $existing['product_ids'] ?? []);
         $f = [];
         $pdo = Db::pdo();
 
@@ -30,7 +34,7 @@ final class ReceiptValidator
             $active = $st->fetchColumn();
             if ($active === false) {
                 $f['supplier_id'] = 'proveedor no existe';
-            } elseif ((int) $active !== 1) {
+            } elseif ((int) $active !== 1 && $sid !== $keepSupplier) {
                 $f['supplier_id'] = 'proveedor inactivo';
             }
         }
@@ -95,7 +99,7 @@ final class ReceiptValidator
         $lineOk = true;
         foreach ($items as $n => $it) {
             $before = count($f);
-            self::validateItem($f, "items.$n", is_array($it) ? $it : [], $baseUnits);
+            self::validateItem($f, "items.$n", is_array($it) ? $it : [], $baseUnits, $keepProducts);
             if (count($f) !== $before) {
                 $lineOk = false;
             }
@@ -120,13 +124,13 @@ final class ReceiptValidator
         }
     }
 
-    private static function validateItem(array &$f, string $p, array $it, array $baseUnits): void
+    private static function validateItem(array &$f, string $p, array $it, array $baseUnits, array $keepProducts = []): void
     {
         $pid = self::int($it['product_id'] ?? null);
         $base = null;
         if ($pid === null || $pid <= 0 || !isset($baseUnits[$pid])) {
             $f["$p.product_id"] = 'producto no existe';
-        } elseif (!$baseUnits[$pid]['active']) {
+        } elseif (!$baseUnits[$pid]['active'] && !in_array($pid, $keepProducts, true)) {
             $f["$p.product_id"] = 'producto inactivo';
         } else {
             $base = $baseUnits[$pid]['unit'];

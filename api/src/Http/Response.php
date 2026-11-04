@@ -23,15 +23,17 @@ final class Response
     }
 
     /** CSV with a UTF-8 BOM so Excel opens accents correctly. */
-    public static function csv(string $filename, iterable $rows): self
+    public static function csv(string $filename, iterable $rows, string $sep = ','): self
     {
-        $fh = fopen('php://memory', 'w+');
+        // Quote only when needed (fputcsv also quotes fields containing spaces, which is noisy in headers).
+        $enc = static function ($v) use ($sep): string {
+            $v = (string) $v;
+            return strpbrk($v, $sep . "\"\r\n") !== false ? '"' . str_replace('"', '""', $v) . '"' : $v;
+        };
+        $body = "\xEF\xBB\xBF";
         foreach ($rows as $row) {
-            fputcsv($fh, $row, ',', '"', '', "\r\n");
+            $body .= implode($sep, array_map($enc, $row)) . "\r\n";
         }
-        rewind($fh);
-        $body = "\xEF\xBB\xBF" . stream_get_contents($fh);
-        fclose($fh);
         return self::download($filename, $body, 'text/csv; charset=utf-8');
     }
 

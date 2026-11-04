@@ -93,8 +93,8 @@ final class PriceQueries
                 $ref = self::findBelow(
                     $byProduct[(int) $l['product_id']] ?? [],
                     (string) $date,
-                    (int) $l['receipt_id'],
-                    (int) $l['line_order']
+                    isset($l['receipt_id']) ? (int) $l['receipt_id'] : PHP_INT_MAX, // unsaved line ranks after saved ones
+                    (int) ($l['line_order'] ?? 0)
                 );
             }
             $cmp = Compare::change(
@@ -110,6 +110,174 @@ final class PriceQueries
             $lines[$n]['comparison'] = $cmp;
         }
         return $lines;
+    }
+
+    /**
+     * History rows (annotated), unpaged, newest first, undated last. Voided receipts are always excluded.
+     * Filters: from, to, product_id, supplier_id, category_id, receipt_number (substring), doc_type,
+     * direction (up|down|flagged, applied after annotation), include_undated (bool; undated rows ignore from/to).
+     *
+     * @return array<int,array>
+     */
+    public static function history(array $f): array
+    {
+        $where = ["r.status = 'active'"];
+        $args = [];
+        foreach (['product_id' => 'i.product_id', 'supplier_id' => 'r.supplier_id', 'category_id' => 'p.category_id', 'doc_type' => 'r.doc_type'] as $k => $col) {
+            if (isset($f[$k]) && $f[$k] !== '') {
+                $where[] = "$col = ?";
+                $args[] = $f[$k];
+            }
+        }
+        if (isset($f['receipt_number']) && $f['receipt_number'] !== '') {
+            $where[] = 'r.receipt_number LIKE ?';
+            $args[] = '%' . addcslashes((string) $f['receipt_number'], '\\%_') . '%';
+        }
+        $dated = ['r.date_unknown = 0', 'r.purchase_date IS NOT NULL'];
+        if (!empty($f['from'])) {
+            $dated[] = 'r.purchase_date >= ?';
+            $args[] = $f['from'];
+        }
+        if (!empty($f['to'])) {
+            $dated[] = 'r.purchase_date <= ?';
+            $args[] = $f['to'];
+        }
+        $datedSql = '(' . implode(' AND ', $dated) . ')';
+        $where[] = !empty($f['include_undated']) ? "($datedSql OR r.date_unknown = 1)" : $datedSql;
+
+        $st = Db::pdo()->prepare(
+            'SELECT r.id AS receipt_id, r.purchase_date, r.date_unknown, s.name AS supplier_name, i.product_id,
+                    p.name AS product_name, c.name AS category_name, p.base_unit, r.doc_type, r.receipt_number,
+                    i.line_order, i.quantity, i.entry_unit, i.package_count, i.package_content, i.package_unit,
+                    i.base_quantity, i.entered_amount, i.amount_paid, i.real_cost, i.normalized_price
+             FROM receipt_items i
+             JOIN receipts r ON r.id = i.receipt_id
+             JOIN suppliers s ON s.id = r.supplier_id
+             JOIN products p ON p.id = i.product_id
+             LEFT JOIN categories c ON c.id = p.category_id
+             WHERE ' . implode(' AND ', $where) . '
+             ORDER BY (r.purchase_date IS NULL), r.purchase_date DESC, r.id DESC, i.line_order DESC, i.id DESC'
+        );
+        $st->execute($args);
+        $nf = static fn($v) => $v === null ? null : (float) $v;
+        $rows = [];
+        foreach ($st->fetchAll() as $r) {
+            $rows[] = [
+                'receipt_id' => (int) $r['receipt_id'],
+                'purchase_date' => $r['purchase_date'],
+                'date_unknown' => (int) $r['date_unknown'] === 1,
+                'supplier_name' => $r['supplier_name'],
+                'product_id' => (int) $r['product_id'],
+                'product_name' => $r['product_name'],
+                'category_name' => $r['category_name'],
+                'doc_type' => $r['doc_type'],
+                'receipt_number' => $r['receipt_number'],
+                'line_order' => (int) $r['line_order'],
+                'quantity' => (float) $r['quantity'],
+                'entry_unit' => $r['entry_unit'],
+                'package_count' => $nf($r['package_count']),
+                'package_content' => $nf($r['package_content']),
+                'package_unit' => $r['package_unit'],
+                'base_quantity' => $nf($r['base_quantity']),
+                'base_unit' => $r['base_unit'],
+                'entered_amount' => (int) $r['entered_amount'],
+                'amount_paid' => (int) $r['amount_paid'],
+                'real_cost' => (int) $r['real_cost'],
+                'normalized_price' => $nf($r['normalized_price']),
+            ];
+        }
+        $rows = self::annotate($rows);
+        $dir = $f['direction'] ?? null;
+        if ($dir !== null && $dir !== '') {
+            $rows = array_values(array_filter($rows, static function (array $r) use ($dir): bool {
+                $c = $r['comparison'];
+                return match ($dir) {
+                    'flagged' => $c['flagged'],
+                    default => $c['status'] === $dir,
+                };
+            }));
+        }
+        return $rows;
+    }
+
+    /**
+     * Per-product price stats. "Recent" = purchase_date >= today - recent_days. Only active receipts count;
+     * undated lines appear only in `series` (purchase_date null) and in purchase_count.
+     *
+     * @param array<int,int> $productIds
+     * @return array<int,array{stats:array,by_supplier:array,series:array}>
+     */
+    public static function productStats(array $productIds): array
+    {
+        $out = [];
+        if (!$productIds) {
+            return $out;
+        }
+        $recentDays = (int) Settings::get('recent_days');
+        $cutoff = (new \DateTimeImmutable(\KT\Receipts\ReceiptValidator::today()))->modify("-$recentDays days")->format('Y-m-d');
+        $ph = implode(',', array_fill(0, count($productIds), '?'));
+        $st = Db::pdo()->prepare(
+            "SELECT i.product_id, i.normalized_price, r.purchase_date, r.date_unknown, r.doc_type, s.name AS supplier_name
+             FROM receipt_items i
+             JOIN receipts r ON r.id = i.receipt_id
+             JOIN suppliers s ON s.id = r.supplier_id
+             WHERE i.product_id IN ($ph) AND r.status = 'active'
+             ORDER BY (r.purchase_date IS NULL), r.purchase_date, r.id, i.line_order, i.id"
+        );
+        $st->execute(array_values($productIds));
+        $lines = [];
+        foreach ($st->fetchAll() as $r) {
+            $lines[(int) $r['product_id']][] = $r;
+        }
+        foreach ($productIds as $pid) {
+            $latest = null;
+            $lowest = null;
+            $bySup = [];
+            $series = [];
+            $rows = $lines[$pid] ?? [];
+            foreach ($rows as $r) {
+                if ($r['normalized_price'] === null) {
+                    continue;
+                }
+                $price = (float) $r['normalized_price'];
+                $undated = $r['purchase_date'] === null || (int) $r['date_unknown'] === 1;
+                $series[] = [
+                    'purchase_date' => $undated ? null : $r['purchase_date'],
+                    'normalized_price' => $price,
+                    'supplier_name' => $r['supplier_name'],
+                    'doc_type' => $r['doc_type'],
+                ];
+                if ($undated) {
+                    continue;
+                }
+                $pt = ['normalized_price' => $price, 'supplier_name' => $r['supplier_name'], 'purchase_date' => $r['purchase_date']];
+                $latest = $pt;
+                $inWindow = $r['purchase_date'] >= $cutoff;
+                if ($inWindow && ($lowest === null || $price <= $lowest['normalized_price'])) {
+                    $lowest = $pt;
+                }
+                $sn = $r['supplier_name'];
+                $bySup[$sn] ??= ['supplier_name' => $sn, 'latest_normalized_price' => $price, 'purchase_date' => $r['purchase_date'], 'count_in_window' => 0];
+                $bySup[$sn]['latest_normalized_price'] = $price;
+                $bySup[$sn]['purchase_date'] = $r['purchase_date'];
+                if ($inWindow) {
+                    $bySup[$sn]['count_in_window']++;
+                }
+            }
+            $bs = array_values($bySup);
+            usort($bs, static fn($a, $b) => [$b['purchase_date'], $a['supplier_name']] <=> [$a['purchase_date'], $b['supplier_name']]);
+            $out[$pid] = [
+                'stats' => [
+                    'latest' => $latest,
+                    'lowest_recent' => $lowest,
+                    'purchase_count' => count($rows),
+                    'recent_days' => $recentDays,
+                ],
+                'by_supplier' => $bs,
+                'series' => $series,
+            ];
+        }
+        return $out;
     }
 
     /** Binary search: last row whose key is strictly below the given key. Rows sorted ascending by key. */
