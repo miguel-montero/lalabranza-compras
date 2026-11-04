@@ -58,11 +58,14 @@ final class ImportValidator
             $flags[] = 'unknown_supplier';
         } else {
             $sugg['supplier_id'] = (int) $supplier['id'];
+            $sugg['supplier_name'] = $supplier['name'];
         }
         if ($product === null) {
             $flags[] = 'unknown_product';
         } else {
             $sugg['product_id'] = (int) $product['id'];
+            $sugg['product_name'] = $product['name'];
+            $sugg['product_base_unit'] = $product['base_unit'];
         }
 
         $swapProduct = $supplierText === '' ? null : $this->catalog->findProductByNameOrAlias($supplierText);

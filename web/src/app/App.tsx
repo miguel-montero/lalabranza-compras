@@ -9,7 +9,8 @@ import DashboardPage from '@/features/prices/DashboardPage'
 import HistoryPage from '@/features/prices/HistoryPage'
 import LookupPage from '@/features/prices/LookupPage'
 import ProductPage from '@/features/prices/ProductPage'
-import Placeholder from '@/features/placeholders/Placeholder'
+import ImportPage from '@/features/admin/ImportPage'
+import SettingsPage from '@/features/admin/SettingsPage'
 import ReceiptEditPage from '@/features/receipts/ReceiptEditPage'
 import ReceiptDetailPage from '@/features/receipts/ReceiptDetailPage'
 import ReceiptForm from '@/features/receipts/ReceiptForm'
@@ -38,8 +39,8 @@ export default function App() {
             <Route path="/proveedores" element={<SuppliersPage />} />
             <Route path="/categorias" element={<CategoriesPage />} />
             <Route path="/historial" element={<HistoryPage />} />
-            <Route path="/ajustes" element={<Placeholder title="Ajustes" />} />
-            <Route path="/importar" element={<Placeholder title="Importar planilla" />} />
+            <Route path="/ajustes" element={<SettingsPage />} />
+            <Route path="/importar" element={<ImportPage />} />
           </Route>
         </Routes>
       </BrowserRouter>
