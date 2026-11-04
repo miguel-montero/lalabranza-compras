@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use KT\Auth\Auth;
 use KT\Auth\Csrf;
+use KT\Catalog\CatalogController;
 use KT\Http\HttpError;
 use KT\Http\Request;
 use KT\Http\Response;
@@ -75,4 +76,6 @@ return static function (Router $router): void {
         Settings::set($r->json());
         return Response::json(Settings::all());
     });
+
+    CatalogController::register($router);
 };

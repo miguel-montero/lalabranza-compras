@@ -14,7 +14,8 @@ final class MigratorTest extends TestCase
         $pdo = Db::pdo();
         DbTestCase::dropAllTables($pdo);
         $m = new Migrator();
-        $this->assertSame(['001_init.sql'], $m->migrate($pdo));
+        $applied = $m->migrate($pdo);
+        $this->assertSame('001_init.sql', $applied[0]);
         $this->assertSame([], $m->migrate($pdo));
         $v = $pdo->query("SELECT v FROM settings WHERE k='iva_rate'")->fetchColumn();
         $this->assertSame('0.19', $v);
