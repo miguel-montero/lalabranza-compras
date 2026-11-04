@@ -74,6 +74,12 @@ final class Backup
         if (!is_dir($dir) && !@mkdir($dir, 0750, true) && !is_dir($dir)) {
             throw new \RuntimeException('No se pudo crear el directorio de respaldos');
         }
+        if (!is_file($dir . '/.htaccess')) {
+            file_put_contents($dir . '/.htaccess', "Require all denied\n<IfModule !mod_authz_core.c>\n  Deny from all\n</IfModule>\n");
+        }
+        if (!is_file($dir . '/index.html')) {
+            file_put_contents($dir . '/index.html', '');
+        }
         $path = rtrim($dir, '/') . '/' . self::filename();
         if (file_put_contents($path, self::dump($pdo)) === false) {
             throw new \RuntimeException('No se pudo escribir el respaldo');

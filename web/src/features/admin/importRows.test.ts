@@ -70,7 +70,7 @@ const base: EditRow = {
   index: 0, date: '2026-01-10', supplier: 'A', product: 'B', category: null, quantity: 3, unit: 'kg',
   unit_price: 920, total: null, receipt_number: '1', serverFlags: ['ambiguous_price'],
   supplierId: 1, supplierName: 'A', productId: 2, productName: 'B', productBaseUnit: 'kg', docType: 'boleta', priceMode: null, dateUnknown: false,
-  acceptNoNumber: false, swapReviewed: false, selected: false,
+  acceptNoNumber: false, acceptDuplicate: false, swapReviewed: false, selected: false,
 }
 
 describe('flag resolution', () => {
@@ -85,5 +85,10 @@ describe('flag resolution', () => {
     const r = { ...base, priceMode: 'total' as const, date: null, receipt_number: null, serverFlags: ['possible_swap'] }
     expect(activeFlags(r).sort()).toEqual(['missing_date', 'missing_receipt_number', 'possible_swap'])
     expect(activeFlags({ ...r, dateUnknown: true, acceptNoNumber: true, swapReviewed: true })).toEqual([])
+  })
+  it('duplicate receipt number is cleared by accepting it', () => {
+    const r = { ...base, priceMode: 'total' as const, serverFlags: ['duplicate_receipt_number'] }
+    expect(activeFlags(r)).toEqual(['duplicate_receipt_number'])
+    expect(activeFlags({ ...r, acceptDuplicate: true })).toEqual([])
   })
 })

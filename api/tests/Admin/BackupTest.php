@@ -75,7 +75,7 @@ final class BackupTest extends ApiTestCase
         $this->assertSame(200, $this->cron($good));
         $files = glob($dir . '/kt-backup-*.sql');
         $this->assertCount(1, $files);
-        array_map('unlink', $files);
+        array_map('unlink', glob($dir . '/{*,.htaccess}', GLOB_BRACE));
         rmdir($dir);
 
         AdminController::configure([]);
@@ -105,6 +105,25 @@ final class BackupTest extends ApiTestCase
         $this->assertFileExists($new);
         $this->assertFileExists($other);
         array_map('unlink', [$new, $other]);
+        rmdir($dir);
+    }
+
+    public function test_example_config_placeholder_token_is_rejected(): void
+    {
+        $ex = require __DIR__ . '/../../config.example.php';
+        $this->assertLessThan(32, strlen($ex['cron_token']));
+        AdminController::configure($ex);
+        $this->assertSame(403, $this->cron($ex['cron_token']));
+        $this->assertStringNotContainsString(realpath(__DIR__ . '/../../public'), (string) realpath(dirname($ex['backup_dir'])));
+    }
+
+    public function test_backup_dir_is_protected(): void
+    {
+        $dir = sys_get_temp_dir() . '/kt-prot-' . bin2hex(random_bytes(4));
+        Backup::writeTo(self::$pdo, $dir);
+        $this->assertStringContainsString('Require all denied', file_get_contents($dir . '/.htaccess'));
+        $this->assertSame('', file_get_contents($dir . '/index.html'));
+        array_map('unlink', glob($dir . '/{*,.htaccess}', GLOB_BRACE));
         rmdir($dir);
     }
 }

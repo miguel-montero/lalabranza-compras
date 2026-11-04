@@ -25,6 +25,7 @@ const FLAG_LABELS: Record<string, string> = {
   possible_swap: '¿Columnas invertidas?',
   ambiguous_price: '¿Precio unitario o total?',
   invalid_quantity: 'Cantidad inválida',
+  duplicate_receipt_number: 'N° boleta ya existe',
 }
 const UNITS: Unit[] = ['kg', 'g', 'L', 'mL', 'unidad']
 
@@ -57,6 +58,7 @@ function toEdit(v: Validated, i: number): EditRow {
     priceMode: null,
     dateUnknown: false,
     acceptNoNumber: false,
+    acceptDuplicate: false,
     swapReviewed: false,
     selected: false,
   }
@@ -151,16 +153,24 @@ export default function ImportPage() {
           quantity: r.quantity,
           entry_unit: r.unit,
           entered_amount: effectiveAmount(r),
-          accepted_flags: r.acceptNoNumber ? ['missing_receipt_number'] : [],
+          accepted_flags: [
+            ...(r.acceptNoNumber ? ['missing_receipt_number'] : []),
+            ...(r.acceptDuplicate ? ['duplicate_receipt_number'] : []),
+          ],
         })),
       })
       setResult(res)
       setRows([])
       toast.success('Importación completa')
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'duplicate_receipt_number') {
-        toast.error(`Ya existe una compra con el N° ${String(err.data.receipt_number)} de ese proveedor.`)
-      } else if (err instanceof ApiError && err.code === 'unresolved_flags') {
+      if (err instanceof ApiError && err.code === 'unresolved_flags') {
+        const bad = (err.data.rows as { index: number; flags: string[] }[]) ?? []
+        setRows((rs) =>
+          rs.map((r) => {
+            const b = bad.find((x) => x.index === r.index)
+            return b ? { ...r, serverFlags: [...new Set([...r.serverFlags, ...b.flags])] } : r
+          }),
+        )
         toast.error('Quedan filas por resolver.')
       } else toast.error(errorMessage(err))
     } finally {
@@ -244,6 +254,11 @@ function RowCard({ r, patch, swap, alias }: { r: EditRow; patch: (p: Partial<Edi
             {FLAG_LABELS[f] ?? f}
           </Badge>
         ))}
+        {flags.includes('duplicate_receipt_number') && (
+          <Button type="button" size="sm" variant="outline" onClick={() => patch({ acceptDuplicate: true })}>
+            Aceptar
+          </Button>
+        )}
         {flags.length === 0 && <Badge variant="secondary">Lista</Badge>}
         {amount !== null && <span className="ml-auto text-sm font-medium">{formatCLP(amount)}</span>}
       </div>
@@ -308,7 +323,13 @@ function RowCard({ r, patch, swap, alias }: { r: EditRow; patch: (p: Partial<Edi
         </label>
         <label className="grid gap-1 text-xs text-muted-foreground">
           N° boleta
-          <Input defaultValue={r.receipt_number ?? ''} onBlur={(e) => patch({ receipt_number: e.target.value.trim() || null })} />
+          <Input defaultValue={r.receipt_number ?? ''} onBlur={(e) =>
+              patch({
+                receipt_number: e.target.value.trim() || null,
+                serverFlags: r.serverFlags.filter((f) => f !== 'duplicate_receipt_number'),
+                acceptDuplicate: false,
+              })
+            } />
           {!r.receipt_number && (
             <span className="flex items-center gap-1">
               <input type="checkbox" checked={r.acceptNoNumber} onChange={(e) => patch({ acceptNoNumber: e.target.checked })} />

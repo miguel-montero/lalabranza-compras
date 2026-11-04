@@ -13,7 +13,7 @@ use KT\Settings;
 final class ImportService
 {
     /** Flags a user may knowingly accept; every other flag must be fixed. */
-    private const ACCEPTABLE = ['missing_receipt_number'];
+    private const ACCEPTABLE = ['missing_receipt_number', 'duplicate_receipt_number'];
 
     /** @return array{receipts_created:int, lines_created:int} */
     public function commit(array $rows): array
@@ -46,7 +46,9 @@ final class ImportService
             $date = $unknown ? null : (string) $row['purchase_date'];
             $number = trim((string) ($row['receipt_number'] ?? ''));
             $number = $number === '' ? null : $number;
-            $key = ($number !== null && $date !== null) ? ((int) $row['supplier_id']) . "\0" . $number . "\0" . $date : 'row' . $i;
+            $key = ($number !== null && $date !== null)
+                ? ((int) $row['supplier_id']) . "\0" . $number . "\0" . $date . "\0" . $row['doc_type']
+                : 'row' . $i;
             $groups[$key] ??= ['supplier_id' => (int) $row['supplier_id'], 'date' => $date, 'number' => $number,
                 'doc_type' => (string) $row['doc_type'], 'rows' => []];
             $groups[$key]['rows'][$i] = $row;
@@ -82,17 +84,6 @@ final class ImportService
                     ReceiptValidator::validate($input);
                 } catch (HttpError $e) {
                     throw new HttpError($e->status, $e->errorCode, $e->extra + ['rows' => array_keys($g['rows'])]);
-                }
-                if ($g['number'] !== null) {
-                    $st = $pdo->prepare(
-                        "SELECT id FROM receipts WHERE supplier_id = ? AND receipt_number = ? AND status = 'active' LIMIT 1"
-                    );
-                    $st->execute([$g['supplier_id'], $g['number']]);
-                    if (($dup = $st->fetchColumn()) !== false) {
-                        throw new HttpError(409, 'duplicate_receipt_number', [
-                            'existing_id' => (int) $dup, 'receipt_number' => $g['number'], 'rows' => array_keys($g['rows']),
-                        ]);
-                    }
                 }
                 $calc = ReceiptService::compute($input, $svc->baseUnits($items), $iva);
                 $pdo->prepare(
@@ -154,12 +145,16 @@ final class ImportService
         if (!is_string($row['doc_type'] ?? null) || !in_array($row['doc_type'], ReceiptValidator::DOC_TYPES, true)) {
             $f[] = 'invalid_doc_type';
         }
+        $accepted = is_array($row['accepted_flags'] ?? null) ? $row['accepted_flags'] : [];
+        $ok = static fn(string $flag): bool => in_array($flag, $accepted, true) && in_array($flag, self::ACCEPTABLE, true);
         $num = $row['receipt_number'] ?? null;
         if (!(is_string($num) && trim($num) !== '')) {
-            $accepted = is_array($row['accepted_flags'] ?? null) ? $row['accepted_flags'] : [];
-            if (!in_array('missing_receipt_number', $accepted, true) || !in_array('missing_receipt_number', self::ACCEPTABLE, true)) {
+            if (!$ok('missing_receipt_number')) {
                 $f[] = 'missing_receipt_number';
             }
+        } elseif (!in_array('unknown_supplier', $f, true)
+            && ImportValidator::receiptExists((int) $row['supplier_id'], trim($num)) && !$ok('duplicate_receipt_number')) {
+            $f[] = 'duplicate_receipt_number';
         }
         return $f;
     }

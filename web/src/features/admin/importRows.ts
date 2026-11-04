@@ -27,6 +27,7 @@ export interface EditRow extends ImportRow {
   priceMode: 'unit' | 'total' | null
   dateUnknown: boolean
   acceptNoNumber: boolean
+  acceptDuplicate: boolean
   swapReviewed: boolean
   selected: boolean
 }
@@ -191,6 +192,7 @@ export function activeFlags(r: EditRow): string[] {
   if (!r.receipt_number && !r.acceptNoNumber) f.push('missing_receipt_number')
   if (!r.supplierId) f.push('unknown_supplier')
   if (!r.productId) f.push('unknown_product')
+  if (r.serverFlags.includes('duplicate_receipt_number') && !r.acceptDuplicate) f.push('duplicate_receipt_number')
   if (r.serverFlags.includes('possible_swap') && !r.swapReviewed) f.push('possible_swap')
   if (r.unit_price !== null && r.total === null && r.quantity !== 1 && r.priceMode === null) f.push('ambiguous_price')
   if (!(r.quantity !== null && r.quantity > 0)) f.push('invalid_quantity')

@@ -75,6 +75,11 @@ final class ImportValidator
             $sugg['swapped'] = true;
         }
 
+        if ($supplier !== null && self::text($r['receipt_number'] ?? null) !== ''
+            && self::receiptExists((int) $supplier['id'], self::text($r['receipt_number']))) {
+            $flags[] = 'duplicate_receipt_number';
+        }
+
         $qty = ReceiptValidator::num($r['quantity'] ?? null);
         if ($qty === null || $qty <= 0) {
             $flags[] = 'invalid_quantity';
@@ -83,6 +88,16 @@ final class ImportValidator
             $flags[] = 'ambiguous_price';
         }
         return [$flags, $sugg];
+    }
+
+    /** True when an active receipt already stored has this supplier and number (batch rows are not considered). */
+    public static function receiptExists(int $supplierId, string $number): bool
+    {
+        $st = \KT\Db::pdo()->prepare(
+            "SELECT 1 FROM receipts WHERE supplier_id = ? AND receipt_number = ? AND status = 'active' LIMIT 1"
+        );
+        $st->execute([$supplierId, $number]);
+        return $st->fetchColumn() !== false;
     }
 
     private static function text(mixed $v): string

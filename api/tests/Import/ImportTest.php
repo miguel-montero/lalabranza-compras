@@ -137,13 +137,50 @@ final class ImportTest extends ApiTestCase
         $this->assertSame(422, $st);
     }
 
-    public function test_commit_rejects_duplicate_receipt_number(): void
+    public function test_duplicate_receipt_number_is_acceptable_flag_not_409(): void
     {
         $s = $this->makeSupplier('V');
         $p = $this->makeProduct('P', 'kg');
         $this->call('POST', '/import/commit', ['rows' => [$this->resolved($s, $p)]]);
+
+        [, $v] = $this->call('POST', '/import/validate', ['rows' => [
+            ['supplier' => 'V', 'product' => 'P', 'receipt_number' => 'B1', 'quantity' => 1, 'unit' => 'kg', 'total' => 5, 'date' => '2026-01-01'],
+        ]]);
+        $this->assertSame(['duplicate_receipt_number'], $v['rows'][0]['flags']);
+
         [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [$this->resolved($s, $p)]]);
-        $this->assertSame(409, $st);
-        $this->assertSame('duplicate_receipt_number', $v['error']);
+        $this->assertSame(422, $st);
+        $this->assertSame('unresolved_flags', $v['error']);
+        $this->assertSame(['duplicate_receipt_number'], $v['rows'][0]['flags']);
+
+        [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [
+            $this->resolved($s, $p, ['accepted_flags' => ['duplicate_receipt_number']]),
+        ]]);
+        $this->assertSame(200, $st, json_encode($v));
+        $this->assertSame(1, $v['receipts_created']);
+    }
+
+    public function test_same_number_in_batch_on_different_dates_makes_separate_receipts(): void
+    {
+        $s = $this->makeSupplier('V');
+        $p = $this->makeProduct('P', 'kg');
+        [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [
+            $this->resolved($s, $p, ['purchase_date' => '2026-01-10']),
+            $this->resolved($s, $p, ['purchase_date' => '2026-01-11']),
+        ]]);
+        $this->assertSame(200, $st, json_encode($v));
+        $this->assertSame(['receipts_created' => 2, 'lines_created' => 2], $v);
+    }
+
+    public function test_doc_type_is_part_of_the_grouping_key(): void
+    {
+        $s = $this->makeSupplier('V');
+        $p = $this->makeProduct('P', 'kg');
+        [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [
+            $this->resolved($s, $p),
+            $this->resolved($s, $p, ['doc_type' => 'factura']),
+        ]]);
+        $this->assertSame(200, $st, json_encode($v));
+        $this->assertSame(['receipts_created' => 2, 'lines_created' => 2], $v);
     }
 }
