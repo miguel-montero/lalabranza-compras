@@ -13,10 +13,8 @@ DirectoryIndex index.html
   </If>
 </IfModule>
 
-# Deny dotfiles (.git, .env, .htaccess, ...)
-<FilesMatch "^\.">
-  Require all denied
-</FilesMatch>
+# Dotfiles are denied by the rewrite rule below (a FilesMatch "^\." would also block /.well-known/ validation).
+# Apache itself never serves .ht* files.
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
@@ -25,13 +23,17 @@ DirectoryIndex index.html
   RewriteCond %{HTTPS} !=on
   RewriteCond %{HTTP:X-Forwarded-Proto} !=https
   RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$
+  # AutoSSL / ACME validation must stay reachable over plain HTTP
+  RewriteCond %{REQUEST_URI} !(^|/)\.well-known/
   RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
 
   # Dotfiles / dot-directories (.git, .env, ...) -> 403
+  RewriteCond %{REQUEST_URI} !(^|/)\.well-known/
   RewriteRule (^|/)\. - [F,L]
 
-  # SPA fallback: not an existing file/dir and not under api/ -> index.html
+  # SPA fallback: not an existing file/dir, not under api/ or assets/ (missing assets must 404) -> index.html
   RewriteCond %{REQUEST_URI} !(^|/)api(/|$)
+  RewriteCond %{REQUEST_URI} !(^|/)assets/
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteCond %{REQUEST_FILENAME} !-d
   RewriteRule ^ index.html [L]

@@ -7,6 +7,12 @@ DirectoryIndex index.php
 </Files>
 
 RewriteEngine On
+# Force HTTPS here too (this file does not inherit the parent's rules); not for localhost smoke tests
+RewriteCond %{HTTPS} !=on
+RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
 # Pass the Authorization header through if ever needed
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 # Everything goes to the front controller

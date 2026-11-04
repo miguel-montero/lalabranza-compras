@@ -5,7 +5,7 @@ Destino: HostGator (hosting compartido, Apache, cPanel) en `https://compras.lala
 (alternativa: `https://lalabranza.cl/compras/`, ver "Alternativa en subcarpeta").
 
 - `web/`: frontend (Vite + React). `api/`: backend PHP (sin Composer en producción). `deploy/`: empaquetado y smoke test.
-- **Versión de PHP: 8.1 a 8.3.** El cálculo de vista prevía en el navegador replica el `round()` de PHP 8.1; otras versiones podrían diferir en redondeos.
+- **Versión de PHP: 8.1 a 8.3.** El cálculo de vista previa en el navegador replica el `round()` de PHP 8.1; otras versiones podrían diferir en redondeos.
 
 ## Estructura del paquete (`dist/`)
 
@@ -60,7 +60,13 @@ deploy/build.sh --app-root=/home/USUARIO/kt-app
 
    Debe terminar con `SMOKE PASSED`.
 
-**Sin acceso a shell:** abrir phpMyAdmin, seleccionar la base de datos e importar (pestaña *Importar*) cada archivo de `~/kt-app/migrations/*.sql` en orden numérico (`001_...`, `002_...`). Luego ejecutar `php bin/set-password.php` con alguna otra vía (p. ej. un cron de una sola vez: `php /home/USUARIO/kt-app/bin/set-password.php`, o pedir ayuda a soporte de HostGator para habilitar SSH).
+**Sin acceso a shell:** abrir phpMyAdmin, seleccionar la base de datos e importar (pestaña *Importar*) cada archivo de `~/kt-app/migrations/*.sql` en orden numérico (`001_...`, `002_...`). Luego definir la clave sin shell, con un cron de una sola vez:
+
+1. En File Manager crear `/home/USUARIO/clave.txt` con dos líneas iguales: la clave (mínimo 10 caracteres) repetida.
+2. En Cron Jobs agregar (ejecución en el próximo minuto): `/usr/local/bin/ea-php81 /home/USUARIO/kt-app/bin/set-password.php < /home/USUARIO/clave.txt` (ajustar la ruta de PHP según MultiPHP Manager, ver "Respaldos").
+3. Cuando haya corrido (iniciar sesión en la app para comprobar), **borrar `clave.txt` y el cron job**. La clave queda guardada solo como hash.
+
+Alternativa: pedir a soporte de HostGator que habilite SSH, o usar el Terminal de cPanel si la cuenta lo incluye.
 
 ## Actualizar
 
@@ -76,8 +82,10 @@ El respaldo genera un archivo `.sql` en `backup_dir` y borra los de más de 30 d
 Cron (cPanel > Cron Jobs), todos los días a las 04:00:
 
 ```
-0 4 * * * php ~/kt-app/bin/backup.php
+0 4 * * * /usr/local/bin/ea-php81 ~/kt-app/bin/backup.php
 ```
+
+Usar el binario de PHP explícito: el `php` por defecto del cron puede ser otra versión. Revisar la ruta real en cPanel > MultiPHP Manager (p. ej. `/usr/local/bin/ea-php81`, `ea-php82` o `ea-php83`).
 
 Si el cron de cPanel no está disponible, usar un programador externo (p. ej. cron-job.org) llamando una vez al dia a:
 
