@@ -79,4 +79,5 @@ return static function (Router $router): void {
 
     CatalogController::register($router);
     \KT\Receipts\ReceiptController::register($router);
+    \KT\Prices\PricesController::register($router);
 };

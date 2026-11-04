@@ -56,6 +56,11 @@ final class Request
         return $this->query;
     }
 
+    public function rawBody(): string
+    {
+        return $this->body;
+    }
+
     public function json(): array
     {
         $data = json_decode($this->body, true);

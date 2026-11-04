@@ -162,6 +162,11 @@ final class ReceiptValidator
             }
         }
 
+        if (array_key_exists('iva_exempt', $it)
+            && !(is_bool($it['iva_exempt']) || $it['iva_exempt'] === 0 || $it['iva_exempt'] === 1)) {
+            $f["$p.iva_exempt"] = 'debe ser verdadero o falso';
+        }
+
         $pc = $it['package_count'] ?? null;
         $pk = $it['package_content'] ?? null;
         $pu = $it['package_unit'] ?? null;
@@ -183,6 +188,14 @@ final class ReceiptValidator
             $hasPkg = $okPkg;
             if (!$okPkg) {
                 return;
+            }
+        }
+
+        if ($mode === 'unit_price' && $qty !== null && $qty > 0 && !isset($f["$p.unit_price"]) && !isset($f["$p.quantity"])) {
+            $probe = ['entry_mode' => 'unit_price', 'unit_price' => self::int($it['unit_price'] ?? null),
+                'quantity' => $qty, 'package_count' => $hasPkg ? $pc : null];
+            if (LineCalc::enteredAmount($probe) <= 0) {
+                $f["$p.unit_price"] = 'el monto de la línea debe ser mayor que 0';
             }
         }
 
