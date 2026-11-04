@@ -35,7 +35,7 @@ final class PricesController
             || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
             throw new HttpError(422, 'validation', ['fields' => ['date' => 'fecha inválida']]);
         }
-        // receipt_id (edit mode): compare against what was entered before that receipt, never against itself.
+        // receipt_id (edit mode): new-receipt semantics (date <= D) but never the receipt's own lines.
         $rid = null;
         if (($r->query()['receipt_id'] ?? '') !== '') {
             $rid = ReceiptValidator::int($r->query()['receipt_id']);
@@ -43,7 +43,7 @@ final class PricesController
                 throw new HttpError(422, 'validation', ['fields' => ['receipt_id' => 'inválido']]);
             }
         }
-        return Response::json(PriceQueries::baseline($id, $date, $rid, null));
+        return Response::json(PriceQueries::baseline($id, $date, null, null, $rid));
     }
 
     private const PAGE_SIZE = 50;

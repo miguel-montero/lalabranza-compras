@@ -230,7 +230,7 @@ export function buildPayload(d: Draft, opts: { confirmDuplicate?: boolean } = {}
 export interface UseReceiptDraftOptions {
   storageKey?: string
   initial?: Draft
-  /** Edit mode: baselines ignore this receipt and anything entered after it. */
+  /** Edit mode: baselines use new-receipt semantics (date <= draft date) but exclude this receipt entirely. */
   receiptId?: number
 }
 

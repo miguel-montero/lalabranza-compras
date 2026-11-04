@@ -19,11 +19,12 @@ final class PriceQueries
 
     /**
      * Baseline for a (possibly unsaved) line. $receiptId = null means a new unsaved receipt: every comparable
-     * line dated on or before $purchaseDate counts as earlier.
+     * line dated on or before $purchaseDate counts as earlier. $excludeReceiptId additionally drops every line of
+     * that receipt (use with $receiptId = null for the live baseline of an edited draft).
      *
      * @return array{normalized_price:float, supplier_name:string, purchase_date:string, receipt_id:int}|null
      */
-    public static function baseline(int $productId, string $purchaseDate, ?int $receiptId, ?int $lineOrder): ?array
+    public static function baseline(int $productId, string $purchaseDate, ?int $receiptId, ?int $lineOrder, ?int $excludeReceiptId = null): ?array
     {
         $sql = 'SELECT i.normalized_price, s.name AS supplier_name, r.purchase_date, r.id AS receipt_id
                 FROM receipt_items i
@@ -43,7 +44,13 @@ final class PriceQueries
             }
             $sql .= '))';
         }
-        $sql .= ') ORDER BY r.purchase_date DESC, r.id DESC, i.line_order DESC, i.id DESC LIMIT 1';
+        $sql .= ')';
+        if ($excludeReceiptId !== null) {
+            // Edited draft of a saved receipt: new-receipt semantics (date <= D) minus that receipt entirely.
+            $sql .= ' AND r.id <> ?';
+            $args[] = $excludeReceiptId;
+        }
+        $sql .= ' ORDER BY r.purchase_date DESC, r.id DESC, i.line_order DESC, i.id DESC LIMIT 1';
         $st = Db::pdo()->prepare($sql);
         $st->execute($args);
         $r = $st->fetch();
