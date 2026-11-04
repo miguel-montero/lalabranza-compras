@@ -1,5 +1,14 @@
+Options -Indexes
+DirectoryIndex index.php
+
+# Never serve the app-root pointer directly
+<Files "app-root.php">
+  Require all denied
+</Files>
+
 RewriteEngine On
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteRule ^ index.php [L]
 # Pass the Authorization header through if ever needed
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+# Everything goes to the front controller
+RewriteCond %{REQUEST_URI} !(^|/)index\.php$
+RewriteRule ^ index.php [L]

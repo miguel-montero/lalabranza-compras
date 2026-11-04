@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCategories, useSuppliers } from '@/features/catalog/hooks'
 import { ComparisonChip } from '@/features/receipts/ComparisonChip'
-import { api } from '@/lib/api'
+import { api, apiUrl } from '@/lib/api'
 import { formatCLP, formatDate, formatUnitPrice } from '@/lib/format'
 import type { HistoryRow } from '@/lib/types'
 
@@ -60,7 +60,7 @@ export default function HistoryPage() {
   return (
     <div>
       <PageHeader title="Historial">
-        <a className={buttonVariants({ variant: 'outline' })} href={`/api/history?${filtersToQuery(applied, { format: 'csv' })}`}>
+        <a className={buttonVariants({ variant: 'outline' })} href={apiUrl(`/history?${filtersToQuery(applied, { format: 'csv' })}`)}>
           Exportar CSV
         </a>
       </PageHeader>

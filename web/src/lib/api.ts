@@ -27,13 +27,18 @@ export function getCsrfToken(): string | null {
   return csrfToken
 }
 
+/** Absolute URL of an API path, honouring Vite's base (e.g. '/compras/' on the subpath fallback). */
+export function apiUrl(path: string): string {
+  return import.meta.env.BASE_URL.replace(/\/$/, '') + '/api' + path
+}
+
 export async function api<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   if (csrfToken && method.toUpperCase() !== 'GET') headers['X-CSRF-Token'] = csrfToken
   let res: Response
   try {
-    res = await fetch('/api' + path, {
+    res = await fetch(apiUrl(path), {
       method,
       headers,
       credentials: 'same-origin',

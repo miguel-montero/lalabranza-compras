@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { api } from '@/lib/api'
+import { api, apiUrl } from '@/lib/api'
 import { roundHalfAway } from '@/lib/calc'
 import { errorMessage } from '@/lib/errors'
 import { parseDecimal } from '@/lib/parse'
@@ -97,7 +97,7 @@ export default function SettingsPage() {
         <CardContent className="grid gap-2">
           <p className="text-sm text-muted-foreground">Descarga todos los datos como archivo SQL.</p>
           <Button asChild variant="outline">
-            <a href="/api/admin/backup" download>
+            <a href={apiUrl('/admin/backup')} download>
               Descargar respaldo
             </a>
           </Button>

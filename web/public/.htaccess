@@ -1,0 +1,38 @@
+# Kitchen price tracker - docroot rules (Apache 2.4, mod_rewrite + mod_headers)
+Options -Indexes
+DirectoryIndex index.html
+
+<IfModule mod_headers.c>
+  Header always set X-Robots-Tag "noindex, nofollow"
+  # Everything except hashed assets and the API must always be revalidated (index.html, SPA routes)
+  <If "%{REQUEST_URI} !~ m#/(assets|api)/#">
+    Header set Cache-Control "no-cache"
+  </If>
+  <If "%{REQUEST_URI} =~ m#/assets/#">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </If>
+</IfModule>
+
+# Deny dotfiles (.git, .env, .htaccess, ...)
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Force HTTPS (not for local smoke tests on localhost)
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+  RewriteCond %{HTTP_HOST} !^(localhost|127\.0\.0\.1)(:[0-9]+)?$
+  RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+  # Dotfiles / dot-directories (.git, .env, ...) -> 403
+  RewriteRule (^|/)\. - [F,L]
+
+  # SPA fallback: not an existing file/dir and not under api/ -> index.html
+  RewriteCond %{REQUEST_URI} !(^|/)api(/|$)
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>

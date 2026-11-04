@@ -21,8 +21,9 @@ final class Request
     ) {
         $this->method = strtoupper($method);
         $path = (string)parse_url($uri, PHP_URL_PATH);
-        if ($path === '/api' || str_starts_with($path, '/api/')) {
-            $path = substr($path, strlen('/api'));
+        // Strip the mount prefix: '/api/x' (subdomain) or '/compras/api/x' (subpath fallback).
+        if (preg_match('#^(?:/[^/]+)?/api(?=/|$)#', $path, $m)) {
+            $path = substr($path, strlen($m[0]));
         }
         $path = rtrim($path, '/');
         $this->path = $path === '' ? '/' : '/' . ltrim($path, '/');
