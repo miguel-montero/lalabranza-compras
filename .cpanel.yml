@@ -1,0 +1,13 @@
+---
+# cPanel Git Version Control: "Deploy HEAD Commit" runs these tasks.
+# dist/ is committed (built with deploy/build.sh --app-root=/home4/stampst1/kt-app).
+# Copies only; never deletes, so ~/kt-app/config.php, sessions/ and backups are kept.
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home4/stampst1/compras.lalabranza.cl/
+    - export APPPATH=/home4/stampst1/kt-app/
+    - /bin/mkdir -p $DEPLOYPATH $APPPATH
+    - /bin/cp -R dist/docroot/. $DEPLOYPATH
+    - /bin/cp -R dist/kt-app/. $APPPATH
+    - /bin/mkdir -p ${APPPATH}sessions
+    - /bin/chmod 700 ${APPPATH}sessions

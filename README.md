@@ -26,7 +26,25 @@ dist/kt-app/    -> ~/kt-app/  (FUERA de public_html)
 5. **Cron Jobs**: se crea después de la primera instalación (ver "Respaldos").
 6. Confirmar que el usuario cPanel es el correcto (`/home/USUARIO`) para usarlo en `--app-root`.
 
-## Primer despliegue
+## Despliegue con Git (cPanel Git Version Control) — recomendado
+
+Igual que el sitio principal: el repositorio incluye `dist/` ya compilado y un `.cpanel.yml` que copia:
+
+- `dist/docroot/` → `/home4/stampst1/compras.lalabranza.cl/` (raíz web del subdominio)
+- `dist/kt-app/` → `/home4/stampst1/kt-app/` (fuera de la web; crea `sessions/` con permisos 700)
+
+Solo copia, nunca borra: `config.php`, las sesiones y los respaldos se conservan.
+
+**Una sola vez:**
+
+1. **Domains**: crear `compras.lalabranza.cl` con raíz de documentos `/home4/stampst1/compras.lalabranza.cl` (si cPanel propone otra ruta, usar esa y cambiar `DEPLOYPATH` en `.cpanel.yml`).
+2. **Git Version Control → Create**: *Clone a Repository* activado, URL `https://github.com/miguel-montero/lalabranza-compras.git`, ruta del repositorio p. ej. `/home4/stampst1/repositories/lalabranza-compras`.
+3. **Manage → Pull or Deploy → Deploy HEAD Commit.**
+4. Seguir los pasos 3 a 5 de "Primer despliegue" (crear `config.php`, `migrate.php`, `set-password.php`, smoke test), y el checklist cPanel de arriba (PHP 8.1–8.3, base de datos, AutoSSL, cron).
+
+**Cada actualización:** en tu computador `deploy/build.sh --app-root=/home4/stampst1/kt-app`, commit y push de `dist/`; luego en cPanel **Update from Remote** y **Deploy HEAD Commit**. Si hay migraciones nuevas: `cd ~/kt-app && php bin/migrate.php`.
+
+## Primer despliegue (manual, por FTP / File Manager)
 
 En tu computador (necesita Node 20+ y npm):
 
