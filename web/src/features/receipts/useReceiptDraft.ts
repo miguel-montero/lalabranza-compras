@@ -230,6 +230,8 @@ export function buildPayload(d: Draft, opts: { confirmDuplicate?: boolean } = {}
 export interface UseReceiptDraftOptions {
   storageKey?: string
   initial?: Draft
+  /** Edit mode: baselines ignore this receipt and anything entered after it. */
+  receiptId?: number
 }
 
 export function useReceiptDraft(opts: UseReceiptDraftOptions = {}) {
@@ -284,8 +286,12 @@ export function useReceiptDraft(opts: UseReceiptDraftOptions = {}) {
 
   const baselines = useQueries({
     queries: draft.lines.map((l) => ({
-      queryKey: ['baseline', l.product?.id ?? null, draft.purchase_date],
-      queryFn: () => api<Baseline | null>('GET', `/products/${l.product!.id}/baseline?date=${draft.purchase_date}`),
+      queryKey: ['baseline', l.product?.id ?? null, draft.purchase_date, opts.receiptId ?? null],
+      queryFn: () =>
+        api<Baseline | null>(
+          'GET',
+          `/products/${l.product!.id}/baseline?date=${draft.purchase_date}${opts.receiptId ? `&receipt_id=${opts.receiptId}` : ''}`,
+        ),
       enabled: l.product != null,
       staleTime: 60_000,
     })),

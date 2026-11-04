@@ -23,6 +23,8 @@ export interface ReceiptFormProps {
   submit?: (payload: Record<string, unknown>) => Promise<ReceiptView>
   /** Called after a successful save, after the draft was reset. Default: navigate to /compras/:id. */
   onSaved?: (r: ReceiptView) => void
+  /** Edit mode: the receipt being edited. Changes title/save label, shows "Motivo del cambio", scopes baselines. */
+  editingId?: number
 }
 
 type Errors = Record<string, string>
@@ -41,12 +43,13 @@ function Label({ htmlFor, children }: { htmlFor?: string; children: React.ReactN
   )
 }
 
-export default function ReceiptForm({ storageKey, initial, submit, onSaved }: ReceiptFormProps) {
+export default function ReceiptForm({ storageKey, initial, submit, onSaved, editingId }: ReceiptFormProps) {
   const navigate = useNavigate()
-  const { draft, setHeader, addLine, updateLine, removeLine, computed, reset } = useReceiptDraft({ storageKey, initial })
+  const { draft, setHeader, addLine, updateLine, removeLine, computed, reset } = useReceiptDraft({ storageKey, initial, receiptId: editingId })
   const [errors, setErrors] = useState<Errors>({})
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
+  const [reason, setReason] = useState('')
   const [dupe, setDupe] = useState<number | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const focusNew = useRef(false)
@@ -80,10 +83,11 @@ export default function ReceiptForm({ storageKey, initial, submit, onSaved }: Re
     setSaving(true)
     setDupe(null)
     const { payload, indexMap } = buildPayload(draft, { confirmDuplicate })
+    if (editingId && reason.trim()) payload.reason = reason.trim()
     try {
       const r = submit ? await submit(payload) : await api<ReceiptView>('POST', '/receipts', payload)
       reset()
-      toast.success('Compra guardada')
+      toast.success(editingId ? 'Cambios guardados' : 'Compra guardada')
       if (onSaved) onSaved(r)
       else navigate(`/compras/${r.id}`)
     } catch (e) {
@@ -127,7 +131,7 @@ export default function ReceiptForm({ storageKey, initial, submit, onSaved }: Re
       onSubmit={(e) => e.preventDefault()}
     >
       <div className="sticky top-0 z-10 -mx-4 flex items-baseline justify-between border-b bg-background/95 px-4 py-2 backdrop-blur md:static md:mx-0 md:border-0 md:px-0">
-        <h1 className="text-2xl font-semibold">Nueva compra</h1>
+        <h1 className="text-2xl font-semibold">{editingId ? 'Editar compra' : 'Nueva compra'}</h1>
         <div className="text-right" aria-live="polite">
           <div className="text-xs text-muted-foreground">Total</div>
           <div className="text-xl font-semibold" data-testid="header-total">
@@ -245,8 +249,16 @@ export default function ReceiptForm({ storageKey, initial, submit, onSaved }: Re
         )}
       </Section>
 
+      {editingId && (
+        <div>
+          <Label htmlFor="r-reason">Motivo del cambio (opcional)</Label>
+          <Input id="r-reason" value={reason} maxLength={255} onChange={(e) => setReason(e.target.value)} />
+          {fieldErr('reason')}
+        </div>
+      )}
+
       <Button type="button" size="lg" disabled={saving} className="w-full" onClick={() => void save()}>
-        {saving ? 'Guardando…' : 'Guardar compra'}
+        {saving ? 'Guardando…' : editingId ? 'Guardar cambios' : 'Guardar compra'}
       </Button>
 
       <Dialog open={dupe !== null} onOpenChange={(o) => !o && setDupe(null)}>
