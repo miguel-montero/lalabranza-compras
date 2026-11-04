@@ -14,6 +14,9 @@ use PDOException;
 
 final class ReceiptService
 {
+    /** Decimal places of receipt_items.base_quantity (DECIMAL(16,6), migration 003). */
+    public const BASE_QTY_DP = 6;
+
     /**
      * Pure calculation (no DB). Order: enteredAmount -> spread(adjustment) -> costs -> baseQuantity
      * -> normalizedPrice -> receiptTotals. Client-sent computed values are ignored.
@@ -39,10 +42,8 @@ final class ReceiptService
             $exempt = !empty($l['iva_exempt']);
             $costs = LineCalc::costs($entered[$i] + $shares[$i], $docType, $exempt, $ivaRate);
             $baseUnit = $baseUnitsById[(int) $l['product_id']] ?? null;
+            // The price uses the unrounded quantity (as the TS preview does); only the stored value is rounded.
             $baseQty = $baseUnit === null ? null : LineCalc::baseQuantity($l, $baseUnit);
-            if ($baseQty !== null) {
-                $baseQty = round($baseQty, 4);
-            }
             $out[] = [
                 'product_id' => (int) $l['product_id'],
                 'entry_mode' => $l['entry_mode'],
@@ -58,7 +59,7 @@ final class ReceiptService
                 'adjustment_share' => $shares[$i],
                 'real_cost' => $costs['real_cost'],
                 'amount_paid' => $costs['amount_paid'],
-                'base_quantity' => $baseQty,
+                'base_quantity' => $baseQty === null ? null : round($baseQty, self::BASE_QTY_DP),
                 'normalized_price' => LineCalc::normalizedPrice($costs['real_cost'], $baseQty),
             ];
         }
@@ -199,6 +200,7 @@ final class ReceiptService
         ReceiptValidator::validate($input, [
             'supplier_id' => $current['supplier']['id'],
             'product_ids' => array_column($current['items'], 'product_id'),
+            'date_unknown' => $current['date_unknown'],
         ]);
         $reason = $this->reason($input);
         $supplierId = (int) $input['supplier_id'];
@@ -216,11 +218,13 @@ final class ReceiptService
             $before = $this->view($id);
             $pdo = Db::pdo();
             $pdo->prepare(
-                'UPDATE receipts SET supplier_id = ?, purchase_date = ?, date_unknown = 0, doc_type = ?,
+                'UPDATE receipts SET supplier_id = ?, purchase_date = ?, date_unknown = ?, doc_type = ?,
                     receipt_number = ?, adjustment_amount = ?, delivery_amount = ?, printed_total = ?, notes = ?
                  WHERE id = ?'
             )->execute([
-                $supplierId, $input['purchase_date'], $input['doc_type'], $number,
+                // The validator allows a null date only for an already-undated receipt, which stays undated.
+                $supplierId, $input['purchase_date'] ?? null, ($input['purchase_date'] ?? null) === null ? 1 : 0,
+                $input['doc_type'], $number,
                 (int) ($input['adjustment_amount'] ?? 0), (int) ($input['delivery_amount'] ?? 0),
                 isset($input['printed_total']) ? (int) $input['printed_total'] : null,
                 $this->nullIfEmpty($input['notes'] ?? null), $id,

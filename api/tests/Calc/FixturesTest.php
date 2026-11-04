@@ -8,6 +8,7 @@ use KT\Calc\Allocation;
 use KT\Calc\Compare;
 use KT\Calc\LineCalc;
 use KT\Calc\Units;
+use KT\Receipts\ReceiptService;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
@@ -104,5 +105,27 @@ final class FixturesTest extends TestCase
     public function testEnteredAmount(array $in, mixed $out): void
     {
         $this->assertSame($out, LineCalc::enteredAmount(...$in));
+    }
+
+    public static function computeCases(): array { return self::cases('compute'); }
+
+    /** Line pipeline: only the item keys listed in the fixture are compared, with a 1e-6 tolerance. */
+    #[DataProvider('computeCases')]
+    public function testCompute(array $in, mixed $out): void
+    {
+        $r = ReceiptService::compute($in[0], $in[1], (float) $in[2]);
+        $this->assertCount(count($out['items']), $r['items']);
+        foreach ($out['items'] as $n => $exp) {
+            foreach ($exp as $k => $v) {
+                $act = $r['items'][$n][$k];
+                if ($v === null) {
+                    $this->assertNull($act, "items.$n.$k");
+                } else {
+                    $this->assertNotNull($act, "items.$n.$k");
+                    $this->assertEqualsWithDelta($v, $act, 1e-6, "items.$n.$k");
+                }
+            }
+        }
+        $this->assertSame($out['totals'], $r['totals']);
     }
 }

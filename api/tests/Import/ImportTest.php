@@ -183,4 +183,34 @@ final class ImportTest extends ApiTestCase
         $this->assertSame(200, $st, json_encode($v));
         $this->assertSame(['receipts_created' => 2, 'lines_created' => 2], $v);
     }
+
+    public function test_commit_accepts_mass_product_in_unidad_as_non_comparable(): void
+    {
+        $s = $this->makeSupplier('V');
+        $p = $this->makeProduct('P', 'kg');
+        [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [$this->resolved($s, $p, ['entry_unit' => 'unidad', 'quantity' => 3])]]);
+        $this->assertSame(200, $st, json_encode($v));
+        $row = self::$pdo->query('SELECT base_quantity, normalized_price FROM receipt_items')->fetch();
+        $this->assertNull($row['base_quantity']);
+        $this->assertNull($row['normalized_price']);
+    }
+
+    public function test_commit_validation_errors_are_attributed_to_rows(): void
+    {
+        $s = $this->makeSupplier('V');
+        $p = $this->makeProduct('P', 'kg');
+        $oil = $this->makeProduct('O', 'L');
+        // Rows 0 and 2 share receipt B1; row 2 (second line of that receipt) has an incompatible unit.
+        [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [
+            $this->resolved($s, $p),
+            $this->resolved($s, $p, ['receipt_number' => 'B2']),
+            $this->resolved($s, $oil, ['entry_unit' => 'kg']),
+        ]]);
+        $this->assertSame(422, $st);
+        $this->assertSame('validation', $v['error']);
+        $this->assertSame([0, 2], $v['rows']);
+        $this->assertSame(['entry_unit' => 'unidad incompatible con L'], $v['row_fields']['2']);
+        $this->assertArrayNotHasKey('0', $v['row_fields']);
+        $this->assertSame(0, (int) self::$pdo->query('SELECT COUNT(*) FROM receipts')->fetchColumn());
+    }
 }

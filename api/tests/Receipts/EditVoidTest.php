@@ -213,4 +213,48 @@ final class EditVoidTest extends ApiTestCase
         [$st] = $this->call('PUT', "/receipts/{$a['id']}", $in);
         $this->assertSame(422, $st);
     }
+
+    /** Imports an undated receipt (date_unknown = 1) and returns its view. */
+    private function undated(int $s, int $p, int $amount): array
+    {
+        [$st, $v] = $this->call('POST', '/import/commit', ['rows' => [[
+            'supplier_id' => $s, 'product_id' => $p, 'purchase_date' => null, 'date_unknown' => true,
+            'doc_type' => 'boleta', 'receipt_number' => 'U1', 'quantity' => 1, 'entry_unit' => 'kg',
+            'entered_amount' => $amount, 'accepted_flags' => [],
+        ]]]);
+        $this->assertSame(200, $st, json_encode($v));
+        $id = (int) self::$pdo->query("SELECT id FROM receipts WHERE receipt_number = 'U1'")->fetchColumn();
+        return $this->get($id);
+    }
+
+    public function test_put_null_date_keeps_undated_receipt_undated(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $p = $this->makeProduct('Arroz', 'kg');
+        $u = $this->undated($s, $p, 99999);
+        $this->assertTrue($u['date_unknown']);
+        [$st, $v] = $this->call('PUT', "/receipts/{$u['id']}", $this->input($u, [$this->line($p, 88888)], ['purchase_date' => null]));
+        $this->assertSame(200, $st, json_encode($v));
+        $this->assertTrue($v['date_unknown']);
+        $this->assertNull($v['purchase_date']);
+        $this->assertSame(88888, $v['items'][0]['real_cost']);
+        // Still excluded from baselines.
+        $this->assertNull(\KT\Prices\PriceQueries::baseline($p, '2030-01-01', null, null));
+        // Giving it a date makes it a normal dated receipt.
+        [$st, $v] = $this->call('PUT', "/receipts/{$u['id']}", $this->input($u, [$this->line($p, 88888)], ['purchase_date' => '2026-01-05']));
+        $this->assertSame(200, $st, json_encode($v));
+        $this->assertFalse($v['date_unknown']);
+        $this->assertSame('2026-01-05', $v['purchase_date']);
+    }
+
+    public function test_put_null_date_on_dated_receipt_is_422(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $p = $this->makeProduct('Arroz', 'kg');
+        $a = $this->make($s, [$this->line($p, 1000)]);
+        [$st, $v] = $this->call('PUT', "/receipts/{$a['id']}", $this->input($a, [$this->line($p, 1000)], ['purchase_date' => null]));
+        $this->assertSame(422, $st);
+        $this->assertArrayHasKey('purchase_date', $v['fields']);
+        $this->assertSame($a['purchase_date'], $this->get($a['id'])['purchase_date']);
+    }
 }

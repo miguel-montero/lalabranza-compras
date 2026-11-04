@@ -21,6 +21,23 @@ final class Auth
         self::$config = $config;
     }
 
+    /** @return array the configuration passed to configure() */
+    public static function config(): array
+    {
+        return self::$config;
+    }
+
+    /**
+     * Private session directory (config `session_dir`, default `<app root>/sessions`, outside the docroot).
+     * Shared hosting runs session GC on the shared save_path with its own (often 24 min) lifetime; a private
+     * directory keeps our 12 h idle timeout.
+     */
+    public static function sessionDir(): string
+    {
+        $dir = self::$config['session_dir'] ?? null;
+        return is_string($dir) && $dir !== '' ? rtrim($dir, '/') : dirname(__DIR__, 2) . '/sessions';
+    }
+
     public static function startSession(): void
     {
         if (session_status() === PHP_SESSION_ACTIVE) {
@@ -37,6 +54,18 @@ final class Auth
             'use_strict_mode' => true,
             'gc_maxlifetime' => self::IDLE_SECONDS,
         ];
+        $dir = self::sessionDir();
+        if (!is_dir($dir) && @mkdir($dir, 0700, true)) {
+            @chmod($dir, 0700);
+        }
+        if (is_dir($dir) && is_writable($dir)) {
+            $opts['save_path'] = $dir;
+            // Our own directory is not cleaned by the host's cron, so let PHP collect it (1% of requests).
+            $opts['gc_probability'] = 1;
+            $opts['gc_divisor'] = 100;
+        } else {
+            error_log("KT: session_dir $dir is not writable; using the default session.save_path");
+        }
         if ($cli) {
             // Tests supply the session id themselves and have no cookies / headers.
             $opts['use_cookies'] = false;

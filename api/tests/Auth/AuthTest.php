@@ -175,4 +175,39 @@ final class AuthTest extends DbTestCase
         $this->expectException(HttpError::class);
         Auth::requireUser();
     }
+
+    public function test_session_uses_private_save_path_with_12h_gc(): void
+    {
+        $this->endSession();
+        $prev = Auth::config();
+        $dir = sys_get_temp_dir() . '/kt-sess-' . bin2hex(random_bytes(4));
+        try {
+            Auth::configure(['session_dir' => $dir] + $prev);
+            $this->assertSame($dir, Auth::sessionDir());
+            Auth::startSession();
+            $this->assertSame($dir, session_save_path());
+            $this->assertDirectoryExists($dir);
+            $this->assertSame('0700', substr(sprintf('%o', fileperms($dir)), -4));
+            $this->assertSame((string) (12 * 3600), ini_get('session.gc_maxlifetime'));
+            $_SESSION['x'] = 1;
+            session_write_close();
+            $this->assertNotEmpty(glob($dir . '/sess_*'));
+        } finally {
+            $this->endSession();
+            Auth::configure($prev);
+            array_map('unlink', glob($dir . '/*') ?: []);
+            @rmdir($dir);
+        }
+    }
+
+    public function test_default_session_dir_is_under_app_root(): void
+    {
+        $prev = Auth::config();
+        try {
+            Auth::configure(array_diff_key($prev, ['session_dir' => true]));
+            $this->assertSame(dirname(__DIR__, 2) . '/sessions', Auth::sessionDir());
+        } finally {
+            Auth::configure($prev);
+        }
+    }
 }

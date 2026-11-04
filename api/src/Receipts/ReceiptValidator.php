@@ -13,12 +13,15 @@ final class ReceiptValidator
     public const UNITS = ['kg', 'g', 'L', 'mL', 'unidad'];
     public const DOC_TYPES = ['boleta', 'factura'];
     public const MODES = ['total', 'unit_price'];
+    /** Largest value receipt_items.normalized_price (DECIMAL(14,4)) can hold. */
+    public const MAX_NORMALIZED_PRICE = 9999999999.9999;
 
     /** Throws HttpError(422, 'validation', ['fields' => [...]]) when the input is not acceptable. */
     public static function validate(array $input, ?array $existing = null): void
     {
-        // $existing (edit mode): ['supplier_id' => int, 'product_ids' => int[]] already on the receipt. They stay
-        // acceptable even if since deactivated; only newly referenced ones must be active.
+        // $existing (edit mode): ['supplier_id' => int, 'product_ids' => int[], 'date_unknown' => bool] of the stored
+        // receipt. Its supplier/products stay acceptable even if since deactivated; only newly referenced ones must
+        // be active. A null purchase_date is accepted only when the stored receipt is undated (date_unknown).
         $keepSupplier = isset($existing['supplier_id']) ? (int) $existing['supplier_id'] : null;
         $keepProducts = array_map('intval', $existing['product_ids'] ?? []);
         $f = [];
@@ -40,7 +43,11 @@ final class ReceiptValidator
         }
 
         $date = $input['purchase_date'] ?? null;
-        if (!is_string($date) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)
+        // Edit of an undated imported receipt: a null date keeps it undated (still excluded from baselines).
+        $keepUndated = !empty($existing['date_unknown']);
+        if ($date === null && $keepUndated) {
+            // acceptable
+        } elseif (!is_string($date) || !preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $date, $m)
             || !checkdate((int) $m[2], (int) $m[3], (int) $m[1])) {
             $f['purchase_date'] = 'fecha inválida';
         } elseif ($date > self::today()) {
@@ -120,6 +127,16 @@ final class ReceiptValidator
                 if ($it['entered_amount'] + $it['adjustment_share'] < 0) {
                     throw new HttpError(422, 'validation', ['fields' => ['adjustment_amount' => 'adjustment_too_large']]);
                 }
+            }
+            // normalized_price is DECIMAL(14,4): a tiny quantity for a large amount would overflow it.
+            $f = [];
+            foreach ($calc['items'] as $n => $it) {
+                if ($it['normalized_price'] !== null && $it['normalized_price'] > self::MAX_NORMALIZED_PRICE) {
+                    $f["items.$n.quantity"] = 'cantidad demasiado pequeña para el monto';
+                }
+            }
+            if ($f) {
+                throw new HttpError(422, 'validation', ['fields' => $f]);
             }
         }
     }
@@ -203,7 +220,10 @@ final class ReceiptValidator
             }
         }
 
-        if ($base !== null && $unitOk && $qty !== null) {
+        // Spec 5.1 / AT-04: a kg or L product counted in `unidad` with no net content is accepted; it has no
+        // normalized price, is shown as "Sin comparación" and is never a baseline. Other mismatches are errors.
+        $noContentUnits = !$hasPkg && $unit === 'unidad';
+        if ($base !== null && $unitOk && $qty !== null && !$noContentUnits) {
             $probe = ['quantity' => 1, 'entry_unit' => $unit,
                 'package_count' => $hasPkg ? $pc : null, 'package_content' => $hasPkg ? $pk : null,
                 'package_unit' => $hasPkg ? $pu : null];

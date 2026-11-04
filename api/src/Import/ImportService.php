@@ -83,7 +83,10 @@ final class ImportService
                 try {
                     ReceiptValidator::validate($input);
                 } catch (HttpError $e) {
-                    throw new HttpError($e->status, $e->errorCode, $e->extra + ['rows' => array_keys($g['rows'])]);
+                    throw new HttpError($e->status, $e->errorCode, $e->extra + [
+                        'rows' => array_keys($g['rows']),
+                        'row_fields' => self::rowFields($e->extra['fields'] ?? [], array_keys($g['rows'])),
+                    ]);
                 }
                 $calc = ReceiptService::compute($input, $svc->baseUnits($items), $iva);
                 $pdo->prepare(
@@ -106,6 +109,28 @@ final class ImportService
             throw $e;
         }
         return ['receipts_created' => $receipts, 'lines_created' => $lines];
+    }
+
+    /**
+     * Maps receipt-level validation fields ("items.N.field") to the spreadsheet rows of the group.
+     * Header-level fields (no item index) are attached to every row of the group.
+     * @param array<string,string> $fields
+     * @param int[] $rowIndexes row index of each item, in item order
+     * @return array<string, array<string,string>> row index (as string key) => field => message
+     */
+    private static function rowFields(array $fields, array $rowIndexes): array
+    {
+        $out = [];
+        foreach ($fields as $k => $msg) {
+            if (preg_match('/^items\.(\d+)\.(.+)$/', (string) $k, $m) && isset($rowIndexes[(int) $m[1]])) {
+                $out[(string) $rowIndexes[(int) $m[1]]][$m[2]] = $msg;
+            } else {
+                foreach ($rowIndexes as $ri) {
+                    $out[(string) $ri][(string) $k] = $msg;
+                }
+            }
+        }
+        return $out;
     }
 
     /** @return string[] flags that are neither resolved by the row's content nor acceptable-and-accepted */

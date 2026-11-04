@@ -3,6 +3,7 @@ import fixtures from '../../../shared/calc-fixtures.json'
 import {
   baseQuantity,
   change,
+  computeReceipt,
   enteredAmount,
   lineCosts,
   normalizedPrice,
@@ -80,6 +81,21 @@ describe('fixtures', () => {
   })
   it.each(F.enteredAmount.map((c) => [JSON.stringify(c.in), c] as const))('enteredAmount %s', (_n, c) => {
     expect((enteredAmount as any)(...c.in)).toBe(c.out)
+  })
+  it.each(F.compute.map((c) => [JSON.stringify(c.in), c] as const))('compute %s', (_n, c) => {
+    const r = (computeReceipt as any)(...c.in)
+    expect(r.items).toHaveLength(c.out.items.length)
+    c.out.items.forEach((exp: Record<string, number | null>, n: number) => {
+      for (const [k, v] of Object.entries(exp)) {
+        const act = r.items[n][k]
+        if (v === null) expect(act, `items.${n}.${k}`).toBeNull()
+        else {
+          expect(act, `items.${n}.${k}`).not.toBeNull()
+          expect(act, `items.${n}.${k}`).toBeCloseTo(v, 6)
+        }
+      }
+    })
+    expect(r.totals).toEqual(c.out.totals)
   })
 })
 

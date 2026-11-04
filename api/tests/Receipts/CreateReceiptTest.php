@@ -153,7 +153,7 @@ final class CreateReceiptTest extends DbTestCase
         $a = $this->makeProduct('Arroz', 'kg');
         $body = $this->receipt(999999, [
             $this->line($a, 1000, -1),
-            $this->line($oil, 1000, 2, 'unidad'),
+            $this->line($oil, 1000, 2, 'kg'), // mass unit on a volume product: still rejected
         ]);
         [$st, $r] = $this->call('POST', '/receipts', $body);
         $this->assertSame(422, $st);
@@ -298,5 +298,61 @@ final class CreateReceiptTest extends DbTestCase
         (require __DIR__ . '/../../src/routes.php')($router);
         $res = $router->dispatch(new Request('POST', '/api/receipts', [], [], '{}'));
         $this->assertSame(401, $res->status);
+    }
+
+    /** Spec 5.1 / AT-04: a kg/L product entered in `unidad` without net content is saved but not comparable. */
+    public function test_mass_product_in_unidad_without_content_is_saved_non_comparable(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $arroz = $this->makeProduct('Arroz', 'kg');
+        $oil = $this->makeProduct('Aceite', 'L');
+        [$st, $v] = $this->call('POST', '/receipts', $this->receipt($s, [
+            $this->line($arroz, 1000, 2, 'unidad'),
+            $this->line($oil, 3000, 1, 'unidad'),
+        ], ['purchase_date' => '2026-01-10']));
+        $this->assertSame(201, $st, json_encode($v));
+        foreach ($v['items'] as $it) {
+            $this->assertSame('unidad', $it['entry_unit']);
+            $this->assertNull($it['base_quantity']);
+            $this->assertNull($it['normalized_price']);
+        }
+        // A later comparable purchase finds no baseline: the unidad line is never one.
+        [$st, $w] = $this->call('POST', '/receipts', $this->receipt($s, [$this->line($arroz, 1200, 1)], ['purchase_date' => '2026-01-20']));
+        $this->assertSame(201, $st);
+        [, $d] = $this->call('GET', "/receipts/{$w['id']}");
+        $this->assertSame('none', $d['items'][0]['comparison']['status']);
+        [, $d0] = $this->call('GET', "/receipts/{$v['id']}");
+        $this->assertSame('none', $d0['items'][0]['comparison']['status']);
+        // Package content in `unidad` for a kg product is still rejected (no usable net content given).
+        [$st, $r] = $this->call('POST', '/receipts', $this->receipt($s, [$this->line($arroz, 1000, 2, 'unidad', [
+            'package_count' => 2, 'package_content' => 3, 'package_unit' => 'unidad',
+        ])]));
+        $this->assertSame(422, $st);
+        $this->assertArrayHasKey('items.0.entry_unit', $r['fields']);
+    }
+
+    /** 0.125 g for $5.000 is stored without loss and priced from the unrounded quantity. */
+    public function test_tiny_quantity_priced_from_unrounded_base_quantity(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $azafran = $this->makeProduct('Azafrán', 'kg');
+        [$st, $v] = $this->call('POST', '/receipts', $this->receipt($s, [$this->line($azafran, 5000, 0.125, 'g')]));
+        $this->assertSame(201, $st, json_encode($v));
+        $this->assertSame(0.125, $v['items'][0]['quantity']);
+        $this->assertSame(0.000125, $v['items'][0]['base_quantity']);
+        $this->assertEquals(40000000, $v['items'][0]['normalized_price']);
+        [$st, $v] = $this->call('POST', '/receipts', $this->receipt($s, [$this->line($azafran, 5000, 0.04, 'g')]));
+        $this->assertSame(201, $st, json_encode($v));
+        $this->assertEquals(125000000, $v['items'][0]['normalized_price']);
+    }
+
+    public function test_price_beyond_column_range_is_422(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $p = $this->makeProduct('Azafrán', 'kg');
+        [$st, $r] = $this->call('POST', '/receipts', $this->receipt($s, [$this->line($p, 5000, 0.0001, 'g')]));
+        $this->assertSame(422, $st);
+        $this->assertArrayHasKey('items.0.quantity', $r['fields']);
+        $this->assertSame(0, $this->rows('receipts'));
     }
 }

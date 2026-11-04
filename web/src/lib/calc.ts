@@ -57,6 +57,27 @@ export function roundHalfAway(x: number, decimals = 0): number {
   return (x < 0 ? -r : r) + 0
 }
 
+const CONTENT_UNITS_BY_BASE: Record<BaseUnit, Unit[]> = {
+  kg: ['kg', 'g'],
+  L: ['L', 'mL'],
+  unidad: ['unidad'],
+}
+const ALL_UNITS: Unit[] = ['kg', 'g', 'L', 'mL', 'unidad']
+
+/**
+ * Entry units accepted for a product. `unidad` is always allowed (spec 5.1): a kg/L product counted
+ * in units without net content is saved but has no normalized price ("Sin comparación").
+ */
+export function compatibleUnits(base: BaseUnit | null | undefined): Unit[] {
+  if (!base) return ALL_UNITS
+  return base === 'unidad' ? ['unidad'] : [...CONTENT_UNITS_BY_BASE[base], 'unidad']
+}
+
+/** Units for the net content of a package ("en envases"): these always convert to the base unit. */
+export function contentUnits(base: BaseUnit | null | undefined): Unit[] {
+  return base ? CONTENT_UNITS_BY_BASE[base] : ALL_UNITS
+}
+
 export function toBase(qty: number, unit: Unit, baseUnit: BaseUnit): number | null {
   if (unit === baseUnit && (unit === 'kg' || unit === 'L' || unit === 'unidad')) return qty
   if (unit === 'g' && baseUnit === 'kg') return qty / 1000
@@ -146,4 +167,64 @@ export function change(next: number | null, ref: number | null, thresholdPct: nu
     pct,
     flagged: Math.abs(pct) >= thresholdPct,
   }
+}
+
+/** Decimal places of the stored base quantity (receipt_items.base_quantity DECIMAL(16,6)). */
+export const BASE_QTY_DP = 6
+
+export interface ReceiptInputLine extends LineInput {
+  product_id: number | null
+  iva_exempt?: boolean | null
+}
+
+export interface ReceiptInput {
+  doc_type: DocType
+  adjustment_amount?: number | null
+  delivery_amount?: number | null
+  items: ReceiptInputLine[]
+}
+
+export interface ComputedItem {
+  entered_amount: number
+  adjustment_share: number
+  real_cost: number
+  amount_paid: number
+  /** Stored value, rounded to BASE_QTY_DP. */
+  base_quantity: number | null
+  /** From the unrounded base quantity. */
+  normalized_price: number | null
+}
+
+/**
+ * Mirror of ReceiptService::compute: enteredAmount -> spread(adjustment) -> costs -> baseQuantity ->
+ * normalizedPrice (from the unrounded quantity) -> receiptTotals. Throws like spread() on a non-zero
+ * adjustment over zero amounts.
+ */
+export function computeReceipt(
+  input: ReceiptInput,
+  baseUnitsById: Record<number | string, BaseUnit>,
+  ivaRate: number,
+): { items: ComputedItem[]; totals: ReceiptTotals } {
+  const entered = input.items.map((l) => enteredAmount(l))
+  const shares = spread(entered, Number(input.adjustment_amount ?? 0))
+  const items = input.items.map((l, i): ComputedItem => {
+    const costs = lineCosts(entered[i] + shares[i], input.doc_type, !!l.iva_exempt, ivaRate)
+    const base = l.product_id != null ? baseUnitsById[l.product_id] : undefined
+    const baseQty = base ? baseQuantity(l, base) : null
+    return {
+      entered_amount: entered[i],
+      adjustment_share: shares[i],
+      real_cost: costs.realCost,
+      amount_paid: costs.amountPaid,
+      base_quantity: baseQty === null ? null : roundHalfAway(baseQty, BASE_QTY_DP),
+      normalized_price: normalizedPrice(costs.realCost, baseQty),
+    }
+  })
+  const totals = receiptTotals(
+    items.map((it, i) => ({ realCost: it.real_cost, ivaExempt: !!input.items[i].iva_exempt })),
+    Number(input.delivery_amount ?? 0),
+    input.doc_type,
+    ivaRate,
+  )
+  return { items, totals }
 }

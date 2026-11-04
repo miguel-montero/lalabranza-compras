@@ -31,6 +31,8 @@ printf "<?php\nreturn '%s';\n" "$APP_ROOT" > "$DIST/docroot/api/app-root.php"
 # kt-app: PHP code outside the docroot (no vendor/, no tests/)
 cp "$ROOT/api/bootstrap.php" "$ROOT/api/config.example.php" "$DIST/kt-app/"
 cp -R "$ROOT/api/src" "$ROOT/api/migrations" "$ROOT/api/bin" "$DIST/kt-app/"
+# Private session folder (Auth::sessionDir default); keeps the 12 h session out of the host's shared GC.
+mkdir -m 700 "$DIST/kt-app/sessions"
 find "$DIST" -name '.DS_Store' -delete
 
 echo "Built $DIST (base=$BASE, app-root=$APP_ROOT)"

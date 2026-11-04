@@ -58,5 +58,43 @@
     {"in": [{"entry_mode": "unit_price", "unit_price": 500, "quantity": 5}], "out": 2500},
     {"in": [{"entry_mode": "unit_price", "unit_price": 500, "quantity": 1, "package_count": 3}], "out": 1500},
     {"in": [{"entry_mode": "unit_price", "unit_price": 1000, "quantity": 1.25}], "out": 1250}
+  ],
+  "_compute_note": "Line pipeline (ReceiptService::compute / computeReceipt). in = [receipt input, {product_id: base_unit}, iva_rate]. normalized_price uses the UNROUNDED base quantity; base_quantity is the stored value rounded to 6 dp. Only the listed item keys are compared.",
+  "compute": [
+    {"in": [{"doc_type": "boleta", "items": [
+        {"product_id": 1, "entry_mode": "total", "quantity": 0.125, "entry_unit": "g", "entered_amount": 5000}]},
+      {"1": "kg"}, 0.19],
+     "out": {"items": [{"entered_amount": 5000, "adjustment_share": 0, "real_cost": 5000, "amount_paid": 5000,
+        "base_quantity": 0.000125, "normalized_price": 40000000}],
+       "totals": {"neto": 0, "exento": 0, "iva": 0, "total": 5000}}},
+    {"in": [{"doc_type": "boleta", "items": [
+        {"product_id": 1, "entry_mode": "total", "quantity": 0.04, "entry_unit": "g", "entered_amount": 5000}]},
+      {"1": "kg"}, 0.19],
+     "out": {"items": [{"entered_amount": 5000, "adjustment_share": 0, "real_cost": 5000, "amount_paid": 5000,
+        "base_quantity": 0.00004, "normalized_price": 125000000}],
+       "totals": {"neto": 0, "exento": 0, "iva": 0, "total": 5000}}},
+    {"in": [{"doc_type": "boleta", "items": [
+        {"product_id": 1, "entry_mode": "total", "quantity": 333, "entry_unit": "g", "entered_amount": 1000}]},
+      {"1": "kg"}, 0.19],
+     "out": {"items": [{"entered_amount": 1000, "adjustment_share": 0, "real_cost": 1000, "amount_paid": 1000,
+        "base_quantity": 0.333, "normalized_price": 3003.003}],
+       "totals": {"neto": 0, "exento": 0, "iva": 0, "total": 1000}}},
+    {"in": [{"doc_type": "factura", "adjustment_amount": -400, "delivery_amount": 2000, "items": [
+        {"product_id": 1, "entry_mode": "total", "quantity": 1.5, "entry_unit": "kg", "entered_amount": 1000},
+        {"product_id": 2, "entry_mode": "total", "quantity": 2, "entry_unit": "unidad", "entered_amount": 3000}]},
+      {"1": "kg", "2": "L"}, 0.19],
+     "out": {"items": [
+        {"entered_amount": 1000, "adjustment_share": -100, "real_cost": 900, "amount_paid": 1071,
+         "base_quantity": 1.5, "normalized_price": 600},
+        {"entered_amount": 3000, "adjustment_share": -300, "real_cost": 2700, "amount_paid": 3213,
+         "base_quantity": null, "normalized_price": null}],
+       "totals": {"neto": 5600, "exento": 0, "iva": 1064, "total": 6664}}},
+    {"in": [{"doc_type": "boleta", "items": [
+        {"product_id": 3, "entry_mode": "unit_price", "quantity": 6, "entry_unit": "mL", "unit_price": 1500,
+         "package_count": 6, "package_content": 900, "package_unit": "mL"}]},
+      {"3": "L"}, 0.19],
+     "out": {"items": [{"entered_amount": 9000, "adjustment_share": 0, "real_cost": 9000, "amount_paid": 9000,
+        "base_quantity": 5.4, "normalized_price": 1666.6667}],
+       "totals": {"neto": 0, "exento": 0, "iva": 0, "total": 9000}}}
   ]
 }

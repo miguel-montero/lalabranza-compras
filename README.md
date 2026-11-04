@@ -37,7 +37,7 @@ deploy/build.sh --app-root=/home/USUARIO/kt-app
 (`USUARIO` = usuario cPanel. Genera `dist/`.)
 
 1. Subir (File Manager o FTP/SFTP) el contenido de `dist/docroot/` a `~/public_html/compras/` (incluir los archivos ocultos `.htaccess` y `api/.htaccess`).
-2. Subir `dist/kt-app/` a `~/kt-app/` (fuera de `public_html`).
+2. Subir `dist/kt-app/` a `~/kt-app/` (fuera de `public_html`). Incluye la carpeta vacía `~/kt-app/sessions/` (permisos 700): ahí se guardan las sesiones, para que la limpieza de sesiones compartida del hosting (a menudo 24 minutos) no corte la sesión de 12 horas. Si el File Manager no sube carpetas vacías, la app la crea sola; también se puede cambiar con `session_dir` en `config.php`.
 3. En `~/kt-app/`, copiar `config.example.php` a `config.php` y editar:
    - `db_dsn` => `mysql:host=localhost;dbname=NOMBRE_COMPLETO_DB`, `db_user`, `db_pass`
    - `cookie_secure` => `true`
@@ -60,7 +60,7 @@ deploy/build.sh --app-root=/home/USUARIO/kt-app
 
    Debe terminar con `SMOKE PASSED`.
 
-**Sin acceso a shell:** abrir phpMyAdmin, seleccionar la base de datos e importar (pestaña *Importar*) cada archivo de `~/kt-app/migrations/*.sql` en orden numérico (`001_...`, `002_...`). Luego definir la clave sin shell, con un cron de una sola vez:
+**Sin acceso a shell:** abrir phpMyAdmin, seleccionar la base de datos e importar (pestaña *Importar*) cada archivo de `~/kt-app/migrations/*.sql` en orden numérico (`001_...`, `002_...`, `003_...`). Luego definir la clave sin shell, con un cron de una sola vez:
 
 1. En File Manager crear `/home/USUARIO/clave.txt` con dos líneas iguales: la clave (mínimo 10 caracteres) repetida.
 2. En Cron Jobs agregar (ejecución en el próximo minuto): `/usr/local/bin/ea-php81 /home/USUARIO/kt-app/bin/set-password.php < /home/USUARIO/clave.txt` (ajustar la ruta de PHP según MultiPHP Manager, ver "Respaldos").
@@ -71,7 +71,7 @@ Alternativa: pedir a soporte de HostGator que habilite SSH, o usar el Terminal d
 ## Actualizar
 
 1. `deploy/build.sh --app-root=/home/USUARIO/kt-app`
-2. Subir `dist/docroot/` y `dist/kt-app/` encima de lo existente. **No sobrescribir ni borrar `~/kt-app/config.php`** (el paquete no lo incluye).
+2. Subir `dist/docroot/` y `dist/kt-app/` encima de lo existente. **No sobrescribir ni borrar `~/kt-app/config.php`** (el paquete no lo incluye) ni el contenido de `~/kt-app/sessions/`.
 3. Si hay migraciones nuevas: `cd ~/kt-app && php bin/migrate.php` (es idempotente).
 4. `deploy/smoke.sh https://compras.lalabranza.cl`
 

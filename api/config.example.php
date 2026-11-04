@@ -11,4 +11,6 @@ return [
     // Set a random token of at least 32 characters (e.g. `openssl rand -hex 24`).
     // The placeholder is deliberately shorter, so /api/cron/backup answers 403 until you change it.
     'cron_token' => 'CHANGE-ME',
+    // Optional. Private session folder (created 0700 if missing). Default: <kt-app>/sessions, outside the docroot.
+    // 'session_dir' => '/home/USER/kt-app/sessions',
 ];
