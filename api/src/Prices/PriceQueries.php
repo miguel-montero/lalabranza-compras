@@ -20,7 +20,7 @@ final class PriceQueries
     /**
      * Baseline for a (possibly unsaved) line. $receiptId = null means a new unsaved receipt: every comparable
      * line dated on or before $purchaseDate counts as earlier. $excludeReceiptId additionally drops every line of
-     * that receipt (use with $receiptId = null for the live baseline of an edited draft).
+     * that receipt (pass the same id as $receiptId, lineOrder null, for the live baseline of an edited draft).
      *
      * @return array{normalized_price:float, supplier_name:string, purchase_date:string, receipt_id:int}|null
      */
@@ -46,7 +46,7 @@ final class PriceQueries
         }
         $sql .= ')';
         if ($excludeReceiptId !== null) {
-            // Edited draft of a saved receipt: new-receipt semantics (date <= D) minus that receipt entirely.
+            // Edited draft of a saved receipt: key below (D, receiptId), minus that receipt's own lines entirely.
             $sql .= ' AND r.id <> ?';
             $args[] = $excludeReceiptId;
         }

@@ -105,11 +105,26 @@ final class LookupTest extends ApiTestCase
         $p = $this->makeProduct('Arroz', 'kg');
         $a = $this->make($s, [$this->line($p, 1000)], ['purchase_date' => '2026-01-10']);
         $b = $this->make($s, [$this->line($p, 1200)], ['purchase_date' => '2026-01-10']);
+        [, $v] = $this->call('GET', "/products/$p/baseline", null, ['date' => '2026-01-10', 'receipt_id' => (string) $a['id']]);
+        $this->assertNull($v);
         [, $v] = $this->call('GET', "/products/$p/baseline", null, ['date' => '2026-01-10', 'receipt_id' => (string) $b['id']]);
         $this->assertEquals(1000, $v['normalized_price']);
-        [, $v] = $this->call('GET', "/products/$p/baseline", null, ['date' => '2026-01-10', 'receipt_id' => (string) $a['id']]);
-        $this->assertEquals(1200, $v['normalized_price']); // new-receipt semantics: later-entered same-date counts
-        [, $v] = $this->call('GET', "/products/$p/baseline", null, ['date' => '2026-01-09', 'receipt_id' => (string) $a['id']]);
-        $this->assertNull($v);
+    }
+
+    public function test_edit_baseline_equals_saved_comparison(): void
+    {
+        $s = $this->makeSupplier('Lider');
+        $p = $this->makeProduct('Arroz', 'kg');
+        $this->make($s, [$this->line($p, 1000)], ['purchase_date' => '2026-01-10']);
+        $b = $this->make($s, [$this->line($p, 1200)], ['purchase_date' => '2026-02-10']);
+        [, $base] = $this->call('GET', "/products/$p/baseline", null, ['date' => '2026-03-10', 'receipt_id' => (string) $b['id']]);
+        $in = ['supplier_id' => $s, 'purchase_date' => '2026-03-10', 'doc_type' => 'boleta', 'items' => [$this->line($p, 1250)]];
+        [$st] = $this->call('PUT', "/receipts/{$b['id']}", $in);
+        $this->assertSame(200, $st);
+        [, $saved] = $this->call('GET', "/receipts/{$b['id']}");
+        $ref = $saved['items'][0]['comparison']['ref'];
+        $this->assertEquals($base['normalized_price'], $ref['normalized_price']);
+        $this->assertSame($base['purchase_date'], $ref['purchase_date']);
+        $this->assertEquals(1000, $ref['normalized_price']);
     }
 }
