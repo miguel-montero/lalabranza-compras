@@ -74,6 +74,9 @@ describe('ReceiptForm edit mode', () => {
       </QueryClientProvider>,
     )
     expect(screen.getByRole('heading', { name: 'Editar compra' })).toBeTruthy()
+    // nothing is persisted until the first edit (final-review finding 1)
+    expect(localStorage.getItem('kt:draft:7')).toBeNull()
+    await user.type(screen.getByLabelText('Notas'), 'x')
     expect(localStorage.getItem('kt:draft:7')).toBeTruthy()
     // baselines in edit mode are scoped to the receipt being edited
     await waitFor(() => expect(calls.some((c) => c.url.includes('/products/3/baseline') && c.url.includes('receipt_id=7'))).toBe(true))
@@ -83,5 +86,37 @@ describe('ReceiptForm edit mode', () => {
     const put = calls.find((c) => c.method === 'PUT')!
     expect(JSON.parse(put.body!).reason).toBe('precio mal')
     expect(localStorage.getItem('kt:draft:7')).toBeNull()
+  })
+
+  it('an undated imported receipt shows "sin fecha", previews with its own IVA and PUTs a null date', async () => {
+    const user = userEvent.setup()
+    const undated: ReceiptView = { ...receipt, purchase_date: null, date_unknown: true, doc_type: 'factura', iva_rate: 0.15 }
+    let body: Record<string, unknown> | null = null
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter>
+          <ReceiptForm
+            storageKey="kt:draft:7"
+            initial={draftFromReceipt(undated)}
+            editingId={7}
+            ivaRate={undated.iva_rate}
+            submit={async (p) => {
+              body = p
+              return undated
+            }}
+            onSaved={() => {}}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByTestId('undated-note').textContent).toMatch(/^sin fecha/)
+    expect((screen.getByLabelText('Fecha') as HTMLInputElement).value).toBe('')
+    await waitFor(() => expect(calls.some((c) => c.url.startsWith('/api/settings'))).toBe(true))
+    expect(screen.getByText('IVA (15%)')).toBeTruthy()
+    expect(screen.getByTestId('header-total').textContent).toBe('$1.725')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(body).not.toBeNull())
+    expect(body!.purchase_date).toBeNull()
   })
 })

@@ -2,18 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import {
-  baseQuantity,
   change,
-  enteredAmount,
-  lineCosts,
-  normalizedPrice,
-  receiptTotals,
-  spread,
+  computeReceipt,
   type BaseUnit,
   type Comparison,
   type DocType,
   type EntryMode,
   type LineInput,
+  type ReceiptInputLine,
   type ReceiptTotals,
   type Unit,
 } from '@/lib/calc'
@@ -48,7 +44,10 @@ export interface DraftLine {
 
 export interface Draft {
   idempotency_key: string
+  /** YYYY-MM-DD; '' only for an undated imported receipt being edited (sent as null, stays "sin fecha"). */
   purchase_date: string
+  /** Edit mode: the stored receipt is undated (imported "sin fecha"). */
+  date_unknown?: boolean
   supplier: { id: number; name: string } | null
   doc_type: DocType
   receipt_number: string
@@ -82,13 +81,11 @@ export interface Computed {
   adjustmentTooLarge: boolean
 }
 
-const UNITS_BY_BASE: Record<BaseUnit, Unit[]> = {
-  kg: ['kg', 'g'],
-  L: ['L', 'mL'],
-  unidad: ['unidad'],
-}
-export function compatibleUnits(base: BaseUnit | undefined): Unit[] {
-  return base ? UNITS_BY_BASE[base] : ['kg', 'g', 'L', 'mL', 'unidad']
+export { compatibleUnits, contentUnits } from '@/lib/calc'
+
+/** True when a kg/L product is entered in `unidad` without net content (saved, not comparable). */
+export function isUnitWithoutContent(base: BaseUnit | null | undefined, l: Pick<DraftLine, 'unit' | 'packaged'>): boolean {
+  return !!base && base !== 'unidad' && !l.packaged && l.unit === 'unidad'
 }
 
 export function newLine(): DraftLine {
@@ -133,6 +130,16 @@ export function parseSignedCLP(s: string): number | null {
   return parseCLP(t)
 }
 
+/** True when the user has typed nothing in the draft (its date alone is not content). */
+export function isPristine(d: Draft): boolean {
+  const header = [d.receipt_number, d.notes, d.adjustment, d.delivery, d.printed_total]
+  return (
+    !d.supplier &&
+    header.every((v) => !(v ?? '').trim()) &&
+    d.lines.every((l) => !l.product && !l.amount.trim() && !l.quantity.trim() && !l.package_count.trim() && !l.package_content.trim())
+  )
+}
+
 function load(storageKey: string): Draft | null {
   try {
     const raw = localStorage.getItem(storageKey)
@@ -149,7 +156,9 @@ function load(storageKey: string): Draft | null {
 export function draftFromReceipt(r: ReceiptView): Draft {
   return {
     idempotency_key: crypto.randomUUID(),
-    purchase_date: r.purchase_date ?? todaySantiago(),
+    // An undated imported receipt stays undated unless the user picks a date.
+    purchase_date: r.purchase_date ?? '',
+    date_unknown: r.date_unknown && !r.purchase_date,
     supplier: r.supplier,
     doc_type: r.doc_type,
     receipt_number: r.receipt_number ?? '',
@@ -214,7 +223,7 @@ export function buildPayload(d: Draft, opts: { confirmDuplicate?: boolean } = {}
   const payload: Record<string, unknown> = {
     idempotency_key: d.idempotency_key,
     supplier_id: d.supplier?.id ?? null,
-    purchase_date: d.purchase_date,
+    purchase_date: d.purchase_date || null,
     doc_type: d.doc_type,
     receipt_number: d.receipt_number.trim() || null,
     notes: d.notes.trim() || null,
@@ -232,56 +241,79 @@ export interface UseReceiptDraftOptions {
   initial?: Draft
   /** Edit mode: baselines use the saved-line key (draft date, this receipt id) and exclude this receipt entirely. */
   receiptId?: number
+  /** Edit mode: the receipt's own IVA snapshot (PUT keeps it), instead of the current setting. */
+  ivaRate?: number
 }
 
 export function useReceiptDraft(opts: UseReceiptDraftOptions = {}) {
   const storageKey = opts.storageKey ?? NEW_DRAFT_KEY
-  const [draft, setDraft] = useState<Draft>(() => load(storageKey) ?? opts.initial ?? newDraft())
-
-  // Persist on every change (also writes the initial draft so the key survives a reload).
-  const skipWrite = useRef(false)
-  useEffect(() => {
-    if (skipWrite.current) {
-      skipWrite.current = false
-      return
+  const [init] = useState(() => {
+    const stored = load(storageKey)
+    if (!stored) return { draft: opts.initial ?? newDraft(), stale: null as string | null }
+    const today = todaySantiago()
+    // A new-purchase draft left from another day: an untouched one simply takes today's date; one with
+    // content keeps its date but the form shows "Borrador del dd-mm" with "Usar hoy".
+    if (!opts.receiptId && stored.purchase_date !== today) {
+      if (isPristine(stored)) return { draft: { ...stored, purchase_date: today }, stale: null }
+      return { draft: stored, stale: stored.purchase_date }
     }
+    return { draft: stored, stale: null }
+  })
+  const [draft, setDraft] = useState<Draft>(init.draft)
+  const [staleDate, setStaleDate] = useState<string | null>(init.stale)
+
+  // Persist after the first edit (an untouched form never writes, so no stale draft is left behind).
+  const dirty = useRef(false)
+  useEffect(() => {
+    if (!dirty.current) return
     try {
       localStorage.setItem(storageKey, JSON.stringify(draft))
     } catch {
       /* storage full or unavailable: keep working in memory */
     }
   }, [draft, storageKey])
+  const edit = useCallback((fn: (d: Draft) => Draft) => {
+    dirty.current = true
+    setDraft(fn)
+  }, [])
 
   const setHeader = useCallback(
-    (patch: Partial<Omit<Draft, 'lines' | 'idempotency_key'>>) => setDraft((d) => ({ ...d, ...patch })),
-    [],
+    (patch: Partial<Omit<Draft, 'lines' | 'idempotency_key'>>) => edit((d) => ({ ...d, ...patch })),
+    [edit],
   )
-  const addLine = useCallback(() => setDraft((d) => ({ ...d, lines: [...d.lines, newLine()] })), [])
+  const addLine = useCallback(() => edit((d) => ({ ...d, lines: [...d.lines, newLine()] })), [edit])
   const updateLine = useCallback(
     (key: string, patch: Partial<Omit<DraftLine, 'key'>>) =>
-      setDraft((d) => ({ ...d, lines: d.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) })),
-    [],
+      edit((d) => ({ ...d, lines: d.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) })),
+    [edit],
   )
   const removeLine = useCallback(
     (key: string) =>
-      setDraft((d) => {
+      edit((d) => {
         const lines = d.lines.filter((l) => l.key !== key)
         return { ...d, lines: lines.length ? lines : [newLine()] }
       }),
-    [],
+    [edit],
   )
   const reset = useCallback(() => {
     localStorage.removeItem(storageKey)
-    skipWrite.current = true
+    dirty.current = false
+    setStaleDate(null)
     setDraft(newDraft())
   }, [storageKey])
+  /** Date of a restored draft from another day, while the draft still has it; null otherwise. */
+  const staleDraftDate = staleDate !== null && draft.purchase_date === staleDate ? staleDate : null
+  const applyToday = useCallback(() => {
+    setStaleDate(null)
+    setHeader({ purchase_date: todaySantiago() })
+  }, [setHeader])
 
   const settings = useQuery({
     queryKey: ['settings'],
     queryFn: () => api<Record<string, string>>('GET', '/settings'),
     staleTime: 5 * 60_000,
   })
-  const ivaRate = settings.data?.iva_rate != null ? Number(settings.data.iva_rate) : 0.19
+  const ivaRate = opts.ivaRate ?? (settings.data?.iva_rate != null ? Number(settings.data.iva_rate) : 0.19)
   const thresholdPct = settings.data?.alert_threshold_pct != null ? Number(settings.data.alert_threshold_pct) : 10
 
   const baselines = useQueries({
@@ -292,7 +324,7 @@ export function useReceiptDraft(opts: UseReceiptDraftOptions = {}) {
           'GET',
           `/products/${l.product!.id}/baseline?date=${draft.purchase_date}${opts.receiptId ? `&receipt_id=${opts.receiptId}` : ''}`,
         ),
-      enabled: l.product != null,
+      enabled: l.product != null && draft.purchase_date !== '',
       staleTime: 60_000,
     })),
   })
@@ -301,39 +333,46 @@ export function useReceiptDraft(opts: UseReceiptDraftOptions = {}) {
 
   const computed = useMemo<Computed>(() => {
     const factura = draft.doc_type === 'factura'
-    const entered = draft.lines.map((l) => (l.product ? enteredAmount(lineInput(l)) : 0))
-    const adjustment = parseSignedCLP(draft.adjustment) ?? 0
-    let shares: number[]
-    try {
-      shares = spread(entered, adjustment)
-    } catch {
-      shares = entered.map(() => 0)
+    // Same pipeline as the server (calc.computeReceipt mirrors ReceiptService::compute), over lines with a product.
+    const active = draft.lines.map((l) => l.product != null)
+    const baseUnits: Record<number, BaseUnit> = {}
+    const items: ReceiptInputLine[] = []
+    draft.lines.forEach((l) => {
+      if (!l.product) return
+      baseUnits[l.product.id] = l.product.base_unit
+      items.push({ ...lineInput(l), product_id: l.product.id, iva_exempt: factura && l.iva_exempt })
+    })
+    const input = {
+      doc_type: draft.doc_type,
+      adjustment_amount: parseSignedCLP(draft.adjustment) ?? 0,
+      delivery_amount: parseCLP(draft.delivery) ?? 0,
+      items,
     }
-    const delivery = parseCLP(draft.delivery) ?? 0
+    let calc: ReturnType<typeof computeReceipt>
+    try {
+      calc = computeReceipt(input, baseUnits, ivaRate)
+    } catch {
+      calc = computeReceipt({ ...input, adjustment_amount: 0 }, baseUnits, ivaRate)
+    }
+    let n = 0
     const lines: LineComputed[] = draft.lines.map((l, i) => {
-      const costs = lineCosts(entered[i] + shares[i], draft.doc_type, factura && l.iva_exempt, ivaRate)
-      const baseQty = l.product ? baseQuantity(lineInput(l), l.product.base_unit) : null
-      const np = l.product ? normalizedPrice(costs.realCost, baseQty) : null
+      const it = active[i] ? calc.items[n++] : null
+      const entered = it?.entered_amount ?? 0
+      const np = it?.normalized_price ?? null
       const baseline = baselineData[i]
       const mult = l.packaged ? parseDecimal(l.package_count) : parseDecimal(l.quantity)
       return {
-        baseQty,
-        enteredAmount: entered[i],
-        realCost: costs.realCost,
-        amountPaid: costs.amountPaid,
+        baseQty: it?.base_quantity ?? null,
+        enteredAmount: entered,
+        realCost: it?.real_cost ?? 0,
+        amountPaid: it?.amount_paid ?? 0,
         normalizedPrice: np,
         comparison: change(np, baseline?.normalized_price ?? null, thresholdPct),
         baseline,
-        derivedUnitPrice: mult && mult > 0 && entered[i] > 0 ? entered[i] / mult : null,
+        derivedUnitPrice: mult && mult > 0 && entered > 0 ? entered / mult : null,
       }
     })
-    const active = draft.lines.map((l) => l.product != null)
-    const totals = receiptTotals(
-      lines.flatMap((l, i) => (active[i] ? [{ realCost: l.realCost, ivaExempt: factura && draft.lines[i].iva_exempt }] : [])),
-      delivery,
-      draft.doc_type,
-      ivaRate,
-    )
+    const totals = calc.totals
     const printedTotal = parseCLP(draft.printed_total)
     return {
       lines,
@@ -348,5 +387,5 @@ export function useReceiptDraft(opts: UseReceiptDraftOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, ivaRate, thresholdPct, baselineKey])
 
-  return { draft, setHeader, addLine, updateLine, removeLine, computed, reset, storageKey }
+  return { draft, setHeader, addLine, updateLine, removeLine, computed, reset, storageKey, staleDraftDate, applyToday }
 }

@@ -3,7 +3,9 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { todaySantiago } from '@/lib/santiago'
 import ReceiptForm from './ReceiptForm'
+import { newDraft } from './useReceiptDraft'
 
 const calls: { method: string; url: string }[] = []
 
@@ -76,5 +78,26 @@ describe('ReceiptForm', () => {
     await user.type(screen.getByLabelText('Total línea'), '1000{Enter}')
     expect(screen.getAllByTestId('line-row')).toHaveLength(2)
     expect(receiptPosts()).toHaveLength(0)
+  })
+
+  it('a restored draft from another day shows "Borrador del dd-mm" and "Usar hoy" sets today', async () => {
+    const user = userEvent.setup()
+    const d = newDraft()
+    localStorage.setItem('kt:draft:new', JSON.stringify({ ...d, purchase_date: '2026-01-02', notes: 'pendiente' }))
+    setup()
+    expect(screen.getByText('Borrador del 02-01')).toBeTruthy()
+    expect((screen.getByLabelText('Fecha') as HTMLInputElement).value).toBe('2026-01-02')
+    await user.click(screen.getByRole('button', { name: 'Usar hoy' }))
+    expect((screen.getByLabelText('Fecha') as HTMLInputElement).value).toBe(todaySantiago())
+    expect(screen.queryByText(/Borrador del/)).toBeNull()
+  })
+
+  it('a kg product entered in unidad shows the not-comparable hint', async () => {
+    const d = newDraft()
+    const line = { ...d.lines[0], product: { id: 1, name: 'Arroz', base_unit: 'kg' as const }, unit: 'unidad' as const, quantity: '2', amount: '1000' }
+    localStorage.setItem('kt:draft:new', JSON.stringify({ ...d, lines: [line] }))
+    setup()
+    expect(screen.getByTestId('no-content-hint').textContent).toMatch(/sin contenido neto: no se compara/)
+    expect(screen.getByText('Sin comparación')).toBeTruthy()
   })
 })

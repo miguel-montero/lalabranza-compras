@@ -6,6 +6,7 @@ import { Button, buttonVariants } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useCategories, useSuppliers } from '@/features/catalog/hooks'
+import { ProductPicker, type PickedProduct } from '@/features/catalog/ProductPicker'
 import { ComparisonChip } from '@/features/receipts/ComparisonChip'
 import { api, apiUrl } from '@/lib/api'
 import { formatCLP, formatDate, formatUnitPrice } from '@/lib/format'
@@ -14,6 +15,7 @@ import type { HistoryRow } from '@/lib/types'
 interface Filters {
   from: string
   to: string
+  product_id: string
   supplier_id: string
   category_id: string
   doc_type: string
@@ -21,7 +23,7 @@ interface Filters {
   receipt_number: string
   include_undated: boolean
 }
-const EMPTY: Filters = { from: '', to: '', supplier_id: '', category_id: '', doc_type: '', direction: '', receipt_number: '', include_undated: false }
+const EMPTY: Filters = { from: '', to: '', product_id: '', supplier_id: '', category_id: '', doc_type: '', direction: '', receipt_number: '', include_undated: false }
 
 export function filtersToQuery(f: Filters, extra: Record<string, string> = {}): string {
   const p = new URLSearchParams()
@@ -38,6 +40,7 @@ const sel = 'h-9 w-full rounded-md border border-input bg-card px-2 text-sm'
 
 export default function HistoryPage() {
   const [f, setF] = useState<Filters>(EMPTY)
+  const [product, setProduct] = useState<PickedProduct | null>(null)
   const [applied, setApplied] = useState<Filters>(EMPTY)
   const [page, setPage] = useState(1)
   const suppliers = useSuppliers('', 'all')
@@ -74,6 +77,38 @@ export default function HistoryPage() {
       >
         {label('Desde', <Input type="date" value={f.from} onChange={(e) => set('from', e.target.value)} />)}
         {label('Hasta', <Input type="date" value={f.to} onChange={(e) => set('to', e.target.value)} />)}
+        <div className="col-span-2 grid gap-1 text-sm text-muted-foreground">
+          <span>Producto</span>
+          <div className="flex gap-1">
+            <div className="min-w-0 flex-1">
+              <ProductPicker
+                aria-label="Producto"
+                value={product}
+                active="all"
+                allowCreate={false}
+                placeholder="Todos"
+                onChange={(p) => {
+                  setProduct(p)
+                  set('product_id', String(p.id))
+                }}
+              />
+            </div>
+            {product && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Quitar filtro de producto"
+                onClick={() => {
+                  setProduct(null)
+                  set('product_id', '')
+                }}
+              >
+                ×
+              </Button>
+            )}
+          </div>
+        </div>
         {label(
           'Proveedor',
           <select className={sel} value={f.supplier_id} onChange={(e) => set('supplier_id', e.target.value)}>
@@ -125,6 +160,7 @@ export default function HistoryPage() {
             variant="ghost"
             onClick={() => {
               setF(EMPTY)
+              setProduct(null)
               setApplied(EMPTY)
               setPage(1)
             }}

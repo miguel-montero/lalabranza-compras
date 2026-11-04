@@ -1,4 +1,4 @@
-import { roundHalfAway, type BaseUnit, type DocType, type Unit } from '@/lib/calc'
+import { compatibleUnits, roundHalfAway, type BaseUnit, type DocType, type Unit } from '@/lib/calc'
 
 export type RawRow = Record<string, unknown>
 
@@ -30,6 +30,8 @@ export interface EditRow extends ImportRow {
   acceptDuplicate: boolean
   swapReviewed: boolean
   selected: boolean
+  /** Messages of the last failed commit for this row, by field (cleared when the row is edited). */
+  serverErrors?: Record<string, string>
 }
 
 function key(s: string): string {
@@ -196,7 +198,35 @@ export function activeFlags(r: EditRow): string[] {
   if (r.serverFlags.includes('possible_swap') && !r.swapReviewed) f.push('possible_swap')
   if (r.unit_price !== null && r.total === null && r.quantity !== 1 && r.priceMode === null) f.push('ambiguous_price')
   if (!(r.quantity !== null && r.quantity > 0)) f.push('invalid_quantity')
+  if (r.productId && r.productBaseUnit && r.unit && !compatibleUnits(r.productBaseUnit).includes(r.unit)) f.push('incompatible_unit')
   return f
+}
+
+/** Unit choices for a row: those compatible with the mapped product, plus the current value if it is not one. */
+export function unitOptions(r: Pick<EditRow, 'productId' | 'productBaseUnit' | 'unit'>): Unit[] {
+  const units = compatibleUnits(r.productId ? r.productBaseUnit : null)
+  return r.unit && !units.includes(r.unit) ? [...units, r.unit] : units
+}
+
+/**
+ * Per-row messages of a 422 from /import/commit: `row_fields` (row index -> field -> message) when the
+ * server sends it, otherwise every row in `rows` gets the receipt's `fields`.
+ */
+export function commitErrorsByRow(data: Record<string, unknown>): Record<number, Record<string, string>> {
+  const out: Record<number, Record<string, string>> = {}
+  const rf = data.row_fields
+  if (rf && typeof rf === 'object') {
+    for (const [k, v] of Object.entries(rf as Record<string, Record<string, string>>)) out[Number(k)] = { ...v }
+    return out
+  }
+  const fields = (data.fields && typeof data.fields === 'object' ? data.fields : {}) as Record<string, string>
+  const rows = Array.isArray(data.rows) ? (data.rows as unknown[]).filter((x): x is number => typeof x === 'number') : []
+  if (!Object.keys(fields).length) return out
+  for (const i of rows) {
+    out[i] = {}
+    for (const [k, msg] of Object.entries(fields)) out[i][k.replace(/^items\.\d+\./, '')] = msg
+  }
+  return out
 }
 
 /** Amount paid for the line (IVA-included), or null when it cannot be determined. */

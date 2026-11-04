@@ -25,6 +25,7 @@ export default function ReceiptEditPage() {
       storageKey={`kt:draft:${r.id}`}
       initial={draftFromReceipt(r)}
       editingId={r.id}
+      ivaRate={r.iva_rate}
       submit={(payload) => api<ReceiptView>('PUT', `/receipts/${r.id}`, payload)}
       onSaved={async (saved) => {
         await qc.invalidateQueries()

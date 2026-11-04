@@ -6,13 +6,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api, ApiError } from '@/lib/api'
-import type { BaseUnit, Unit } from '@/lib/calc'
+import type { BaseUnit } from '@/lib/calc'
 import { errorMessage } from '@/lib/errors'
 import { formatCLP } from '@/lib/format'
 import { ProductPicker } from '@/features/catalog/ProductPicker'
 import { SupplierPicker } from '@/features/catalog/SupplierPicker'
 import {
-  activeFlags, effectiveAmount, mapHeaders, normalizeUnit, readSheet, type EditRow, type ImportRow,
+  activeFlags, commitErrorsByRow, effectiveAmount, mapHeaders, normalizeUnit, readSheet, unitOptions, type EditRow, type ImportRow,
 } from './importRows'
 
 const FLAG_LABELS: Record<string, string> = {
@@ -26,8 +26,21 @@ const FLAG_LABELS: Record<string, string> = {
   ambiguous_price: '¿Precio unitario o total?',
   invalid_quantity: 'Cantidad inválida',
   duplicate_receipt_number: 'N° boleta ya existe',
+  incompatible_unit: 'Unidad incompatible',
 }
-const UNITS: Unit[] = ['kg', 'g', 'L', 'mL', 'unidad']
+const FIELD_LABELS: Record<string, string> = {
+  supplier_id: 'Proveedor',
+  product_id: 'Producto',
+  purchase_date: 'Fecha',
+  doc_type: 'Documento',
+  receipt_number: 'N° boleta',
+  quantity: 'Cantidad',
+  entry_unit: 'Unidad',
+  entered_amount: 'Total',
+  package_count: 'Envases',
+  package_content: 'Contenido',
+  package_unit: 'Unidad del contenido',
+}
 
 interface Suggestions {
   supplier_id?: number
@@ -86,7 +99,9 @@ export default function ImportPage() {
   const [result, setResult] = useState<{ receipts_created: number; lines_created: number } | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const patch = (i: number, p: Partial<EditRow>) => setRows((rs) => rs.map((r) => (r.index === i ? { ...r, ...p } : r)))
+  // Editing a row clears the messages of the last failed commit for it.
+  const patch = (i: number, p: Partial<EditRow>) =>
+    setRows((rs) => rs.map((r) => (r.index === i ? { ...r, serverErrors: undefined, ...p } : r)))
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -172,6 +187,10 @@ export default function ImportPage() {
           }),
         )
         toast.error('Quedan filas por resolver.')
+      } else if (err instanceof ApiError && err.status === 422 && err.code === 'validation') {
+        const byRow = commitErrorsByRow(err.data)
+        setRows((rs) => rs.map((r) => (byRow[r.index] ? { ...r, serverErrors: byRow[r.index] } : r)))
+        toast.error(Object.keys(byRow).length ? 'Revisa las filas marcadas.' : errorMessage(err))
       } else toast.error(errorMessage(err))
     } finally {
       setBusy(false)
@@ -242,8 +261,10 @@ function RowCard({ r, patch, swap, alias }: { r: EditRow; patch: (p: Partial<Edi
   const amount = effectiveAmount(r)
   const showSwap = r.serverFlags.includes('possible_swap')
   const canAlias = r.serverFlags.includes('unknown_product') && r.productId && r.product && r.product !== r.productName
+  const errs = Object.entries(r.serverErrors ?? {})
+  const noContent = r.unit === 'unidad' && !!r.productId && (r.productBaseUnit === 'kg' || r.productBaseUnit === 'L')
   return (
-    <li className={`grid gap-2 rounded-md border p-3 ${flags.length ? 'border-amber-500' : ''}`} data-testid="import-row">
+    <li className={`grid gap-2 rounded-md border p-3 ${errs.length ? 'border-destructive' : flags.length ? 'border-amber-500' : ''}`} data-testid="import-row">
       <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={r.selected} onChange={(e) => patch({ selected: e.target.checked })} aria-label={`Seleccionar fila ${r.index + 1}`} />
@@ -262,6 +283,15 @@ function RowCard({ r, patch, swap, alias }: { r: EditRow; patch: (p: Partial<Edi
         {flags.length === 0 && <Badge variant="secondary">Lista</Badge>}
         {amount !== null && <span className="ml-auto text-sm font-medium">{formatCLP(amount)}</span>}
       </div>
+      {errs.length > 0 && (
+        <ul className="text-sm text-destructive" data-testid="row-errors">
+          {errs.map(([k, msg]) => (
+            <li key={k}>
+              {FIELD_LABELS[k] ?? k}: {msg === 'adjustment_too_large' ? 'el descuento es mayor que el total' : msg}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="grid gap-1">
@@ -314,12 +344,14 @@ function RowCard({ r, patch, swap, alias }: { r: EditRow; patch: (p: Partial<Edi
             className="h-9 rounded-md border bg-background px-2 text-sm text-foreground"
             value={r.unit ?? ''}
             onChange={(e) => patch({ unit: normalizeUnit(e.target.value) })}
+            aria-invalid={flags.includes('incompatible_unit') || undefined}
           >
             <option value="">—</option>
-            {UNITS.map((u) => (
+            {unitOptions(r).map((u) => (
               <option key={u} value={u}>{u}</option>
             ))}
           </select>
+          {noContent && <span>sin contenido neto: no se compara</span>}
         </label>
         <label className="grid gap-1 text-xs text-muted-foreground">
           N° boleta

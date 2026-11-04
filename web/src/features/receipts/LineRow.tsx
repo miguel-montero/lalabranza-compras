@@ -7,7 +7,7 @@ import { formatCLP, formatUnitPrice } from '@/lib/format'
 import { parseCLP, parseDecimal } from '@/lib/parse'
 import type { DocType, Unit } from '@/lib/calc'
 import { ComparisonChip } from './ComparisonChip'
-import { compatibleUnits, type DraftLine, type LineComputed } from './useReceiptDraft'
+import { compatibleUnits, contentUnits, isUnitWithoutContent, type DraftLine, type LineComputed } from './useReceiptDraft'
 
 export interface LineRowProps {
   index: number
@@ -22,14 +22,14 @@ export interface LineRowProps {
   onEnterAmount: () => void
 }
 
-function UnitSelect({ value, onChange, base, label, invalid }: { value: Unit; onChange: (u: Unit) => void; base: PickedProduct['base_unit'] | undefined; label: string; invalid?: boolean }) {
+function UnitSelect({ value, onChange, units, label, invalid }: { value: Unit; onChange: (u: Unit) => void; units: Unit[]; label: string; invalid?: boolean }) {
   return (
     <Select value={value} onValueChange={(v) => onChange(v as Unit)}>
       <SelectTrigger className="w-24 shrink-0" aria-label={label} aria-invalid={invalid || undefined}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
-        {compatibleUnits(base).map((u) => (
+        {units.map((u) => (
           <SelectItem key={u} value={u}>
             {u}
           </SelectItem>
@@ -59,11 +59,10 @@ export const LineRow = forwardRef<HTMLDivElement, LineRowProps>(function LineRow
   const bad = (v: string, parse: (s: string) => number | null) => v.trim() !== '' && parse(v) === null
 
   function pickProduct(p: PickedProduct) {
-    const units = compatibleUnits(p.base_unit)
     onChange({
       product: p,
-      unit: units.includes(line.unit) ? line.unit : p.base_unit,
-      package_unit: units.includes(line.package_unit) ? line.package_unit : p.base_unit,
+      unit: compatibleUnits(p.base_unit).includes(line.unit) ? line.unit : p.base_unit,
+      package_unit: contentUnits(p.base_unit).includes(line.package_unit) ? line.package_unit : p.base_unit,
     })
   }
 
@@ -103,7 +102,7 @@ export const LineRow = forwardRef<HTMLDivElement, LineRowProps>(function LineRow
               aria-invalid={!!errors.package_content || bad(line.package_content, parseDecimal) || undefined}
               onChange={(e) => onChange({ package_content: e.target.value })}
             />
-            <UnitSelect value={line.package_unit} base={base} label={`Unidad del contenido, línea ${n}`} invalid={!!errors.package_unit} onChange={(u) => onChange({ package_unit: u })} />
+            <UnitSelect value={line.package_unit} units={contentUnits(base)} label={`Unidad del contenido, línea ${n}`} invalid={!!errors.package_unit} onChange={(u) => onChange({ package_unit: u })} />
           </div>
           {err('package_count')}
           {err('package_content')}
@@ -121,10 +120,15 @@ export const LineRow = forwardRef<HTMLDivElement, LineRowProps>(function LineRow
               aria-invalid={!!errors.quantity || bad(line.quantity, parseDecimal) || undefined}
               onChange={(e) => onChange({ quantity: e.target.value })}
             />
-            <UnitSelect value={line.unit} base={base} label={`Unidad, línea ${n}`} invalid={!!errors.entry_unit} onChange={(u) => onChange({ unit: u })} />
+            <UnitSelect value={line.unit} units={compatibleUnits(base)} label={`Unidad, línea ${n}`} invalid={!!errors.entry_unit} onChange={(u) => onChange({ unit: u })} />
           </div>
           {err('quantity')}
           {err('entry_unit')}
+          {isUnitWithoutContent(base, line) && (
+            <p className="mt-1 text-sm text-muted-foreground" data-testid="no-content-hint">
+              sin contenido neto: no se compara (usa «en envases» para indicar el contenido)
+            </p>
+          )}
         </div>
       )}
       <label className="flex items-center gap-2 text-sm">

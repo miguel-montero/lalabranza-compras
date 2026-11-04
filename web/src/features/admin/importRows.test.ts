@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activeFlags, effectiveAmount, excelSerialToISO, mapHeaders, normalizeUnit, parseCsv, type EditRow } from './importRows'
+import { activeFlags, commitErrorsByRow, effectiveAmount, excelSerialToISO, mapHeaders, normalizeUnit, parseCsv, unitOptions, type EditRow } from './importRows'
 
 describe('importRows', () => {
   it('maps misspelled Pruducto header', () => {
@@ -90,5 +90,33 @@ describe('flag resolution', () => {
     const r = { ...base, priceMode: 'total' as const, serverFlags: ['duplicate_receipt_number'] }
     expect(activeFlags(r)).toEqual(['duplicate_receipt_number'])
     expect(activeFlags({ ...r, acceptDuplicate: true })).toEqual([])
+  })
+})
+
+describe('units and commit errors', () => {
+  const ok = { ...base, priceMode: 'total' as const }
+  it('flags a unit incompatible with the mapped product; unidad is always allowed', () => {
+    expect(activeFlags({ ...ok, unit: 'g' })).toEqual([])
+    expect(activeFlags({ ...ok, unit: 'unidad' })).toEqual([])
+    expect(activeFlags({ ...ok, unit: 'mL' })).toEqual(['incompatible_unit'])
+    expect(activeFlags({ ...ok, unit: 'kg', productBaseUnit: 'L' })).toEqual(['incompatible_unit'])
+    expect(activeFlags({ ...ok, unit: 'kg', productBaseUnit: 'unidad' })).toEqual(['incompatible_unit'])
+  })
+  it('offers only units compatible with the mapped product (keeping the current value visible)', () => {
+    expect(unitOptions({ ...ok, unit: 'kg' })).toEqual(['kg', 'g', 'unidad'])
+    expect(unitOptions({ ...ok, unit: 'mL' })).toEqual(['kg', 'g', 'unidad', 'mL'])
+    expect(unitOptions({ ...ok, productBaseUnit: 'L', unit: null })).toEqual(['L', 'mL', 'unidad'])
+    expect(unitOptions({ ...ok, productId: null, productBaseUnit: null, unit: null })).toEqual(['kg', 'g', 'L', 'mL', 'unidad'])
+  })
+  it('maps a 422 commit error to the affected rows', () => {
+    expect(commitErrorsByRow({ fields: { 'items.1.entry_unit': 'unidad incompatible con L' }, rows: [0, 2],
+      row_fields: { '2': { entry_unit: 'unidad incompatible con L' } } })).toEqual({ 2: { entry_unit: 'unidad incompatible con L' } })
+    // row_fields may arrive as a JSON list when keys are 0..n
+    expect(commitErrorsByRow({ fields: {}, rows: [0], row_fields: [{ purchase_date: 'no puede ser futura' }] }))
+      .toEqual({ 0: { purchase_date: 'no puede ser futura' } })
+    // older servers: no row_fields -> every listed row gets the messages
+    expect(commitErrorsByRow({ fields: { purchase_date: 'no puede ser futura' }, rows: [1, 3] }))
+      .toEqual({ 1: { purchase_date: 'no puede ser futura' }, 3: { purchase_date: 'no puede ser futura' } })
+    expect(commitErrorsByRow({})).toEqual({})
   })
 })

@@ -25,6 +25,8 @@ export interface ReceiptFormProps {
   onSaved?: (r: ReceiptView) => void
   /** Edit mode: the receipt being edited. Changes title/save label, shows "Motivo del cambio", scopes baselines. */
   editingId?: number
+  /** Edit mode: the receipt's IVA snapshot, used by the preview (the server keeps it on PUT). */
+  ivaRate?: number
 }
 
 type Errors = Record<string, string>
@@ -43,9 +45,17 @@ function Label({ htmlFor, children }: { htmlFor?: string; children: React.ReactN
   )
 }
 
-export default function ReceiptForm({ storageKey, initial, submit, onSaved, editingId }: ReceiptFormProps) {
+/** "2026-11-03" -> "03-11" */
+const dayMonth = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}`
+
+export default function ReceiptForm({ storageKey, initial, submit, onSaved, editingId, ivaRate }: ReceiptFormProps) {
   const navigate = useNavigate()
-  const { draft, setHeader, addLine, updateLine, removeLine, computed, reset } = useReceiptDraft({ storageKey, initial, receiptId: editingId })
+  const { draft, setHeader, addLine, updateLine, removeLine, computed, reset, staleDraftDate, applyToday } = useReceiptDraft({
+    storageKey,
+    initial,
+    receiptId: editingId,
+    ivaRate,
+  })
   const [errors, setErrors] = useState<Errors>({})
   const [saving, setSaving] = useState(false)
   const savingRef = useRef(false)
@@ -145,6 +155,19 @@ export default function ReceiptForm({ storageKey, initial, submit, onSaved, edit
           <div>
             <Label htmlFor="r-date">Fecha</Label>
             <Input id="r-date" type="date" max={todaySantiago()} value={draft.purchase_date} aria-invalid={!!errors.purchase_date || undefined} onChange={(e) => setHeader({ purchase_date: e.target.value })} />
+            {draft.date_unknown && !draft.purchase_date && (
+              <p className="mt-1 text-sm text-muted-foreground" data-testid="undated-note">
+                sin fecha: compra importada sin fecha, queda fuera de las comparaciones. Elige una fecha para asignarla.
+              </p>
+            )}
+            {staleDraftDate && (
+              <div role="status" className="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                <span>Borrador del {dayMonth(staleDraftDate)}</span>
+                <Button type="button" size="sm" variant="outline" onClick={applyToday}>
+                  Usar hoy
+                </Button>
+              </div>
+            )}
             {fieldErr('purchase_date')}
           </div>
           <div>
